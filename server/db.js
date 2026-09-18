@@ -7,9 +7,34 @@ import { DB_PATH } from './paths.js';
 const TURSO_URL = process.env.TURSO_DATABASE_URL;
 export const IS_REMOTE = Boolean(TURSO_URL);
 
+// 設定填錯時給人看得懂的提示，不要噴一整頁英文堆疊
+function die(msg) {
+  console.error(`\n  ✗ Turso 設定有誤：${msg}\n    到主機的環境變數頁檢查 TURSO_DATABASE_URL 與 TURSO_AUTH_TOKEN（見 README「部署到雲端」）\n`);
+  process.exit(1);
+}
+if (IS_REMOTE) {
+  const token = process.env.TURSO_AUTH_TOKEN || '';
+  if (!/^libsql:\/\/[\w.-]+\.turso\.io$/.test(TURSO_URL) && !/^https?:\/\//.test(TURSO_URL)) {
+    die(`TURSO_DATABASE_URL 格式不對，應該是 libsql://xxx-你的帳號.turso.io，現在是「${TURSO_URL}」`);
+  }
+  if (!token) die('TURSO_AUTH_TOKEN 沒填');
+  if (!/^[\x21-\x7e]+$/.test(token)) die('TURSO_AUTH_TOKEN 裡有中文或空白，請貼 Turso 後台 Generate Token 產生的那一整串英數字');
+}
+
 const client = IS_REMOTE
   ? createClient({ url: TURSO_URL, authToken: process.env.TURSO_AUTH_TOKEN })
   : createClient({ url: `file:${DB_PATH}` });
+
+if (IS_REMOTE) {
+  try {
+    await client.execute('SELECT 1');
+  } catch (e) {
+    const m = String(e.message || e);
+    if (/401|unauthorized|jwt|token/i.test(m)) die('Turso 拒絕這個 token（401），請確認是這個資料庫產生的 token，且沒有過期');
+    if (/ENOTFOUND|getaddrinfo|404/.test(m)) die(`找不到這個資料庫網址：${TURSO_URL}`);
+    die(m);
+  }
+}
 
 // 報表要用店家當地的日期分天。Turso 主機在國外，SQLite 的 'localtime' 會變成 UTC，
 // 所以一律用固定時差換算，預設台灣 +8。
