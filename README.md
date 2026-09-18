@@ -16,12 +16,14 @@ npm start
 ```
 店內網址   http://192.168.50.2:3001
 廚房看板   http://192.168.50.2:3001/kitchen
+外帶點餐   http://192.168.50.2:3001/takeout
 後台管理   http://192.168.50.2:3001/admin   （店員密碼 1234）
 ```
 
 - **廚房**：平板或螢幕開 `/kitchen`，整天掛著就好，新單會自動跳出來並響提示音
 - **櫃檯/老闆**：開 `/admin` 改菜單、列印 QRcode、結帳
 - **客人**：掃桌上 QRcode 進 `/t/桌號`
+- **外帶**：掃櫃檯的外帶 QRcode 進 `/takeout`（電話外帶也可以由店員在櫃檯開這頁代點）
 
 > 客人手機必須連上**店內同一個 WiFi**，否則掃了打不開。
 
@@ -35,9 +37,14 @@ npm start
 
 ### 改店員密碼
 
+密碼**只能是 4～8 位數字**（手機登入畫面用數字鍵盤，打不出英文）。
+最簡單的方式是後台 →「今日報表」→「店員密碼」直接改，改完存在資料庫，重開也有效。
+
+也可以用環境變數指定預設密碼（後台改過的話以後台為準）：
+
 ```bash
-set STAFF_PIN=你的密碼 && npm start        # Windows cmd
-$env:STAFF_PIN='你的密碼'; npm start        # PowerShell
+set STAFF_PIN=882266 && npm start        # Windows cmd
+$env:STAFF_PIN='882266'; npm start        # PowerShell
 ```
 
 ### IP 會變怎麼辦
@@ -109,6 +116,8 @@ node -e "require('sharp')('menu-source/檔名.jpg').extract({left:0,top:0,width:
 | 某道菜賣完了 | 後台 →「標售完」，客人端立刻變灰、不能點 |
 | 臨時調價 | 後台 →「改價」。**已送出的訂單不受影響**（下單當下就存了價格快照） |
 | 客人加點 | 客人在同一個 QRcode 頁面再點一次即可，會併入同一桌帳單 |
+| 外帶 | 客人掃櫃檯外帶 QRcode（或店員開 `/takeout` 代點），送單時留稱呼。廚房看板會標「外帶・稱呼 #單號」，帳單結帳頁每張外帶單各自一筆 |
+| 打折／免單 | 「帳單結帳」每張帳單上先選「打折」（填 9 = 9折、85 = 85折）、「折抵金額」或「免單」，可填原因，再按付款方式結掉。帳單和報表都會記錄折扣 |
 | 結帳 | 後台 →「帳單結帳」→ 選現金／刷卡／行動支付。結完該桌歸零，下一組客人重新開單 |
 | 印帳單 | 「帳單結帳」→「列印帳單」 |
 | 看今天做多少 | 後台 →「今日報表」，有營業額、桌數、熱銷排行 |
@@ -134,9 +143,9 @@ server/
   seed.js        菜單種子匯入
   menu.seed.json 菜單原始資料
 src/
-  views/TableOrder.vue  客人點餐（手機版）
+  views/TableOrder.vue  客人點餐（手機版；/t/桌號 內用、/takeout 外帶共用）
   views/Kitchen.vue     廚房看板
-  views/Admin.vue       後台：菜單 / QRcode / 帳單 / 報表
+  views/Admin.vue       後台：菜單 / QRcode / 帳單（折扣、免單）/ 報表（改密碼、備份）
   api.ts                前端 API 封裝
 data/restaurant.db      營運資料（含訂單與帳單，記得備份）
 public/images/          菜色照片
@@ -144,8 +153,9 @@ public/images/          菜色照片
 
 ### 資料表
 
-- `tables` — 1～10 號桌
-- `sessions` — 一桌從入座到結帳為一個 session，帳單以此結算
+- `tables` — 1～10 號桌；0 號是外帶保留桌，不會出現在 QRcode 與桌號列表
+- `sessions` — 一桌從入座到結帳為一個 session，帳單以此結算；外帶每張單各自一個 session，並記錄折扣金額與原因
+- `settings` — 店家設定（目前只有後台改過的店員密碼）
 - `orders` / `order_items` — 訂單與明細，明細存下單當下的品名與價格
 - `categories` / `menu_items` — 菜單
 
@@ -173,6 +183,7 @@ public/images/          菜色照片
    | `DATA_DIR` | `/data/db` | 訂單資料庫存放位置，指向 Volume |
    | `IMAGES_DIR` | `/data/images` | 店家上傳的菜色照片，指向 Volume |
    | `PUBLIC_URL` | `https://你的網址` | QRcode 裡要寫的網址 |
+   | `TABLE_COUNT` | `6` | 內用桌數（預設 6 桌），改了重啟即生效 |
 
 5. 開 Domain 拿到網址後，回填 `PUBLIC_URL` 再重新部署一次
 6. 進 `/admin` →「QRcode 列印」→ 列印全部 → 貼到桌上
@@ -205,6 +216,8 @@ public/images/          菜色照片
 免費方案的限制讓它**只能展示、不能營業**：
 
 - 15 分鐘沒流量就休眠，下次開啟要等約 1 分鐘
+  （程式在 Render 上會每 10 分鐘自己喚醒自己一次，平常不太會睡；不想要可設 `KEEP_AWAKE=0`。
+  但 Render 維護或重新部署時還是會重啟，重啟就會遇到下一條的問題）
 - 沒有永久硬碟，重新部署或重啟會清空訂單與店家上傳的照片
   （內建菜單與照片會自動重新匯入，畫面仍是完整的）
 - 每月 750 小時額度

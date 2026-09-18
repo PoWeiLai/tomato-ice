@@ -56,7 +56,7 @@ async function login() {
     <form v-else class="card box" @submit.prevent="login">
       <h1>店員登入</h1>
       <p class="muted">此頁面提供廚房與後台使用，請輸入店員密碼。</p>
-      <input v-model="pin" type="password" inputmode="numeric" placeholder="店員密碼" autofocus />
+      <input v-model="pin" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="店員密碼（數字）" autofocus />
       <p v-if="error" class="err">{{ error }}</p>
       <button class="btn-primary" type="submit" :disabled="busy || !pin">
         {{ busy ? '驗證中…' : '登入' }}

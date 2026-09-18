@@ -5,6 +5,7 @@ export const router = createRouter({
   routes: [
     { path: '/', component: () => import('./views/Home.vue') },
     { path: '/t/:tableId', component: () => import('./views/TableOrder.vue'), props: true },
+    { path: '/takeout', component: () => import('./views/TableOrder.vue'), props: { takeout: true } },
     { path: '/kitchen', component: () => import('./views/Kitchen.vue') },
     { path: '/admin', component: () => import('./views/Admin.vue') },
     { path: '/:pathMatch(.*)*', redirect: '/' },

@@ -55,13 +55,24 @@ CREATE TABLE IF NOT EXISTS tables (
 );
 
 -- 一次「入座到結帳」為一個 session，帳單以 session 結算
+-- 外帶：table_id 固定為 0（保留桌），每一張外帶單各自一個 session
 CREATE TABLE IF NOT EXISTS sessions (
-  id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  table_id   INTEGER NOT NULL REFERENCES tables(id),
-  opened_at  TEXT NOT NULL,
-  closed_at  TEXT,
-  paid_total INTEGER,
-  payment    TEXT
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  table_id      INTEGER NOT NULL REFERENCES tables(id),
+  kind          TEXT NOT NULL DEFAULT 'dine',   -- dine=內用 | takeout=外帶
+  customer      TEXT NOT NULL DEFAULT '',       -- 外帶客人稱呼／電話
+  opened_at     TEXT NOT NULL,
+  closed_at     TEXT,
+  paid_total    INTEGER,                        -- 實收（已扣折扣）
+  discount      INTEGER NOT NULL DEFAULT 0,     -- 折扣金額
+  discount_note TEXT NOT NULL DEFAULT '',       -- 例：9折、免單：老闆招待
+  payment       TEXT
+);
+
+-- 店家設定（目前只有店員密碼）
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS orders (
@@ -84,6 +95,20 @@ CREATE TABLE IF NOT EXISTS order_items (
   options  TEXT NOT NULL DEFAULT '[]' -- 選項快照 [{group,name,price_delta}]
 );
 
+-- 客人用餐後留的星等與心得，老闆在後台看
+CREATE TABLE IF NOT EXISTS feedback (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id INTEGER REFERENCES sessions(id) ON DELETE SET NULL,
+  kind       TEXT NOT NULL DEFAULT 'dine',   -- dine | takeout
+  who        TEXT NOT NULL DEFAULT '',       -- 桌號或外帶稱呼
+  rating     INTEGER NOT NULL,               -- 1～5 顆星
+  comment    TEXT NOT NULL DEFAULT '',
+  photos     TEXT NOT NULL DEFAULT '[]',     -- 客人拍的照片網址 ["/images/feedback/xxx.jpg"]
+  reply      TEXT NOT NULL DEFAULT '',       -- 店家回覆
+  replied_at TEXT,
+  created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_orders_session ON orders(session_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status  ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_items_order    ON order_items(order_id);
@@ -96,12 +121,50 @@ if (!orderItemCols.includes('options')) {
   db.exec("ALTER TABLE order_items ADD COLUMN options TEXT NOT NULL DEFAULT '[]'");
 }
 
-// 桌號 1-10
-const tableCount = db.prepare('SELECT COUNT(*) AS n FROM tables').get().n;
-if (tableCount === 0) {
-  const ins = db.prepare('INSERT INTO tables (id, name, seats) VALUES (?, ?, ?)');
-  for (let i = 1; i <= 10; i++) ins.run(i, `${i} 號桌`, 4);
+// 舊資料庫補欄位（回饋加了照片）
+const feedbackCols = db.prepare('PRAGMA table_info(feedback)').all().map((c) => c.name);
+if (!feedbackCols.includes('photos')) {
+  db.exec("ALTER TABLE feedback ADD COLUMN photos TEXT NOT NULL DEFAULT '[]'");
 }
+// 舊資料庫補欄位（回饋加了店家回覆）
+if (!feedbackCols.includes('reply')) {
+  db.exec(`
+    ALTER TABLE feedback ADD COLUMN reply TEXT NOT NULL DEFAULT '';
+    ALTER TABLE feedback ADD COLUMN replied_at TEXT;
+  `);
+}
+
+// 舊資料庫補欄位（新版加了外帶與折扣）
+const sessionCols = db.prepare('PRAGMA table_info(sessions)').all().map((c) => c.name);
+if (!sessionCols.includes('kind')) {
+  db.exec(`
+    ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'dine';
+    ALTER TABLE sessions ADD COLUMN customer TEXT NOT NULL DEFAULT '';
+    ALTER TABLE sessions ADD COLUMN discount INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE sessions ADD COLUMN discount_note TEXT NOT NULL DEFAULT '';
+  `);
+}
+
+// 內用桌數：預設 6 桌，可用環境變數 TABLE_COUNT 調整。
+// 每次啟動都同步：少的補上、多的刪掉（有歷史帳單掛在上面的桌子保留，不動舊資料）
+export const TABLE_COUNT = Math.max(1, Number(process.env.TABLE_COUNT) || 6);
+{
+  const ins = db.prepare('INSERT OR IGNORE INTO tables (id, name, seats) VALUES (?, ?, ?)');
+  for (let i = 1; i <= TABLE_COUNT; i++) ins.run(i, `${i} 號桌`, 4);
+  db.prepare(
+    'DELETE FROM tables WHERE id > ? AND id NOT IN (SELECT DISTINCT table_id FROM sessions)'
+  ).run(TABLE_COUNT);
+}
+
+/** 外帶用的保留桌號：所有外帶單都掛在這一桌底下，列桌子時要排除 */
+export const TAKEOUT_TABLE_ID = 0;
+db.prepare('INSERT OR IGNORE INTO tables (id, name, seats) VALUES (?, ?, 0)').run(TAKEOUT_TABLE_ID, '外帶');
+
+export const getSetting = (key) => db.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value;
+export const setSetting = (key, value) =>
+  db
+    .prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+    .run(key, String(value));
 
 export function now() {
   return new Date().toISOString();

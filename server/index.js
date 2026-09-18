@@ -2,10 +2,10 @@ import express from 'express';
 import multer from 'multer';
 import QRCode from 'qrcode';
 import os from 'node:os';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { db, now } from './db.js';
+import { db, now, getSetting, setSetting, TAKEOUT_TABLE_ID, TABLE_COUNT } from './db.js';
 import { DATA_DIR, IMAGES_DIR } from './paths.js';
 import { seedMenu } from './seed.js';
 import { sseHandler, broadcast } from './events.js';
@@ -13,7 +13,15 @@ import { sseHandler, broadcast } from './events.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const PORT = Number(process.env.PORT || 3001);
-const STAFF_PIN = String(process.env.STAFF_PIN || '1234');
+
+// 店員密碼一律純數字：手機登入畫面用的是數字鍵盤，打不出英文。
+// 優先順序：後台改過的密碼（存在資料庫）> 環境變數 STAFF_PIN > 1234
+const PIN_RULE = /^\d{4,8}$/;
+const ENV_PIN = String(process.env.STAFF_PIN || '1234');
+if (!PIN_RULE.test(ENV_PIN)) {
+  console.warn(`  ⚠ 環境變數 STAFF_PIN「${ENV_PIN}」不是 4～8 位數字，手機無法輸入，已改用 1234`);
+}
+const staffPin = () => getSetting('staff_pin') || (PIN_RULE.test(ENV_PIN) ? ENV_PIN : '1234');
 
 // 全新部署時資料庫是空的，先把內建菜單灌進去，免得店家打開看到一片空白
 if (db.prepare('SELECT COUNT(*) AS n FROM menu_items').get().n === 0) {
@@ -49,7 +57,7 @@ const baseURL = () =>
 
 // 店員身分（廚房 / 後台）：內網用共用 PIN 即可
 function staffOnly(req, res, next) {
-  if (req.get('x-staff-pin') === STAFF_PIN) return next();
+  if (req.get('x-staff-pin') === staffPin()) return next();
   res.status(401).json({ error: '未授權，請輸入正確店員密碼' });
 }
 
@@ -75,6 +83,10 @@ function optionGroupsOf(itemId) {
   const choices = db.prepare('SELECT * FROM option_choices WHERE group_id = ? ORDER BY sort, id');
   return groups.map((g) => ({ ...g, choices: choices.all(g.id) }));
 }
+// 訂單一律帶上 session 的內用/外帶與客人稱呼，廚房和帳單才知道這張是誰的
+const ORDER_SQL = `SELECT o.*, s.kind, s.customer, s.closed_at
+  FROM orders o JOIN sessions s ON s.id = o.session_id`;
+const orderById = (id) => db.prepare(`${ORDER_SQL} WHERE o.id = ?`).get(id);
 function withItems(orders) {
   return orders.map((o) => {
     const items = itemsOf(o.id);
@@ -90,6 +102,49 @@ function openSession(tableId) {
   const id = db.prepare('INSERT INTO sessions (table_id, opened_at) VALUES (?, ?)').run(tableId, now())
     .lastInsertRowid;
   return db.prepare('SELECT * FROM sessions WHERE id = ?').get(id);
+}
+// 外帶：每一張單自己一個 session，結帳互不影響
+function openTakeoutSession(customer) {
+  const id = db
+    .prepare("INSERT INTO sessions (table_id, kind, customer, opened_at) VALUES (?, 'takeout', ?, ?)")
+    .run(TAKEOUT_TABLE_ID, customer, now()).lastInsertRowid;
+  return db.prepare('SELECT * FROM sessions WHERE id = ?').get(id);
+}
+/** 一張帳單（session）含訂單明細、原價與折扣後應收 */
+function billOf(session) {
+  const orders = withItems(
+    db.prepare(`${ORDER_SQL} WHERE o.session_id = ? AND o.status <> 'cancelled' ORDER BY o.id`).all(session.id)
+  );
+  const table = db.prepare('SELECT * FROM tables WHERE id = ?').get(session.table_id);
+  const subtotal = orders.reduce((sum, o) => sum + o.total, 0);
+  return { ...session, table, orders, subtotal, total: Math.max(0, subtotal - (session.discount || 0)) };
+}
+
+/**
+ * 依店員選的折扣算出折扣金額與說明。
+ * percent：value 是「折數」，例如 9 = 9折、85 = 85折
+ * amount ：value 是直接折抵的金額
+ * free   ：免單，全額折掉
+ */
+function computeDiscount(subtotal, body = {}) {
+  const type = body.type || 'none';
+  const value = Number(body.value);
+  const reason = String(body.reason || '').trim();
+  const withReason = (label) => (reason ? `${label}：${reason}` : label);
+  if (type === 'free') return { discount: subtotal, note: withReason('免單') };
+  if (type === 'percent') {
+    // 接受 9 / 85 / 0.9 這幾種寫法
+    const pct = value > 0 && value < 1 ? value * 100 : value >= 10 ? value : value * 10;
+    if (!Number.isFinite(pct) || pct <= 0 || pct >= 100) throw new Error('折數不正確（例：9 = 9折、85 = 85折）');
+    const label = Number.isInteger(pct / 10) ? `${pct / 10}折` : `${pct}折`;
+    return { discount: Math.min(subtotal, Math.round(subtotal * (1 - pct / 100))), note: withReason(label) };
+  }
+  if (type === 'amount') {
+    if (!Number.isFinite(value) || value <= 0) throw new Error('折抵金額不正確');
+    const amt = Math.min(subtotal, Math.round(value));
+    return { discount: amt, note: withReason(`折抵 $${amt}`) };
+  }
+  return { discount: 0, note: '' };
 }
 
 /* ---------- 客人端 ---------- */
@@ -107,13 +162,13 @@ app.get('/api/menu', (_req, res) => {
 });
 
 app.get('/api/tables', (_req, res) => {
-  res.json(db.prepare('SELECT * FROM tables ORDER BY id').all());
+  res.json(db.prepare('SELECT * FROM tables WHERE id BETWEEN 1 AND ? ORDER BY id').all(TABLE_COUNT));
 });
 
 // 該桌本次用餐的所有訂單（客人可查自己點了什麼、進度到哪）
 app.get('/api/tables/:id/session', (req, res) => {
   const tableId = Number(req.params.id);
-  const table = db.prepare('SELECT * FROM tables WHERE id = ?').get(tableId);
+  const table = db.prepare('SELECT * FROM tables WHERE id = ? AND id BETWEEN 1 AND ?').get(tableId, TABLE_COUNT);
   if (!table) return res.status(404).json({ error: '查無此桌號' });
 
   const session = db
@@ -122,16 +177,35 @@ app.get('/api/tables/:id/session', (req, res) => {
   if (!session) return res.json({ table, session: null, orders: [], total: 0 });
 
   const orders = withItems(
-    db.prepare("SELECT * FROM orders WHERE session_id = ? AND status <> 'cancelled' ORDER BY id").all(session.id)
+    db.prepare(`${ORDER_SQL} WHERE o.session_id = ? AND o.status <> 'cancelled' ORDER BY o.id`).all(session.id)
   );
   res.json({ table, session, orders, total: orders.reduce((s, o) => s + o.total, 0) });
 });
 
-// 送出訂單
+// 外帶客人查自己的單（手機只記得訂單編號，用編號查進度）
+app.get('/api/orders/:id', (req, res) => {
+  const order = orderById(Number(req.params.id));
+  if (!order) return res.status(404).json({ error: '訂單不存在' });
+  res.json(withItems([order])[0]);
+});
+
+// 送出訂單。外帶請帶 takeout: { name, phone }，不用桌號
 app.post('/api/orders', (req, res) => {
-  const { tableId, items, note = '' } = req.body || {};
-  const table = db.prepare('SELECT * FROM tables WHERE id = ?').get(Number(tableId));
-  if (!table) return bad(res, '桌號不存在');
+  const { tableId, items, note = '', takeout } = req.body || {};
+  let table;
+  let customer = '';
+  if (takeout) {
+    const name = String(takeout.name || '').trim();
+    // 只收台灣手機號碼（09 開頭 10 碼），去掉客人可能打的空格或連字號
+    const phone = String(takeout.phone || '').replace(/[\s-]/g, '');
+    if (!name) return bad(res, '外帶請留下稱呼，方便叫餐');
+    if (!/^09\d{8}$/.test(phone)) return bad(res, '請輸入正確的手機號碼（09 開頭共 10 碼）');
+    customer = `${name} ${phone}`;
+    table = db.prepare('SELECT * FROM tables WHERE id = ?').get(TAKEOUT_TABLE_ID);
+  } else {
+    table = db.prepare('SELECT * FROM tables WHERE id = ? AND id BETWEEN 1 AND ?').get(Number(tableId), TABLE_COUNT);
+    if (!table) return bad(res, '桌號不存在');
+  }
   if (!Array.isArray(items) || items.length === 0) return bad(res, '購物車是空的');
 
   const lookup = db.prepare('SELECT * FROM menu_items WHERE id = ?');
@@ -173,7 +247,7 @@ app.post('/api/orders', (req, res) => {
     });
   }
 
-  const session = openSession(table.id);
+  const session = takeout ? openTakeoutSession(customer) : openSession(table.id);
   const orderId = db
     .prepare('INSERT INTO orders (session_id, table_id, status, note, created_at) VALUES (?, ?, ?, ?, ?)')
     .run(session.id, table.id, 'pending', String(note), now()).lastInsertRowid;
@@ -183,7 +257,7 @@ app.post('/api/orders', (req, res) => {
   );
   for (const r of rows) insItem.run(orderId, r.id, r.name, r.price, r.qty, r.note, JSON.stringify(r.options));
 
-  const order = withItems([db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId)])[0];
+  const order = withItems([orderById(orderId)])[0];
   broadcast('order:new', order);
   res.status(201).json(order);
 });
@@ -194,8 +268,8 @@ const STATUSES = ['pending', 'preparing', 'done', 'cancelled'];
 app.get('/api/kitchen/orders', staffOnly, (req, res) => {
   const all = req.query.scope === 'all';
   const sql = all
-    ? "SELECT * FROM orders WHERE date(created_at,'localtime') = date('now','localtime') ORDER BY id DESC"
-    : "SELECT * FROM orders WHERE status IN ('pending','preparing') ORDER BY id";
+    ? `${ORDER_SQL} WHERE date(o.created_at,'localtime') = date('now','localtime') ORDER BY o.id DESC`
+    : `${ORDER_SQL} WHERE o.status IN ('pending','preparing') ORDER BY o.id`;
   res.json(withItems(db.prepare(sql).all()));
 });
 
@@ -206,15 +280,22 @@ app.patch('/api/orders/:id/status', staffOnly, (req, res) => {
   if (!order) return res.status(404).json({ error: '訂單不存在' });
 
   db.prepare('UPDATE orders SET status = ? WHERE id = ?').run(status, order.id);
-  const updated = withItems([db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id)])[0];
+  const updated = withItems([orderById(order.id)])[0];
   broadcast('order:update', updated);
   res.json(updated);
 });
 
-/* ---------- 店員登入 ---------- */
+/* ---------- 店員登入 / 改密碼 ---------- */
 app.post('/api/staff/login', (req, res) => {
-  if (String(req.body?.pin) === STAFF_PIN) return res.json({ ok: true });
+  if (String(req.body?.pin) === staffPin()) return res.json({ ok: true });
   res.status(401).json({ error: '密碼錯誤' });
+});
+
+app.post('/api/admin/pin', staffOnly, (req, res) => {
+  const pin = String(req.body?.pin ?? '').trim();
+  if (!PIN_RULE.test(pin)) return bad(res, '密碼必須是 4～8 位數字（手機才打得出來）');
+  setSetting('staff_pin', pin);
+  res.json({ ok: true });
 });
 
 /* ---------- 後台：菜單 ---------- */
@@ -372,69 +453,203 @@ app.post('/api/admin/upload', staffOnly, (req, res) => {
 
 /* ---------- 後台：QRcode ---------- */
 app.get('/api/admin/qrcodes', staffOnly, async (_req, res) => {
-  const tables = db.prepare('SELECT * FROM tables ORDER BY id').all();
+  const tables = db.prepare('SELECT * FROM tables WHERE id BETWEEN 1 AND ? ORDER BY id').all(TABLE_COUNT);
   const out = [];
   for (const t of tables) {
     const url = `${baseURL()}/t/${t.id}`;
     out.push({ ...t, url, qr: await QRCode.toDataURL(url, { width: 512, margin: 1 }) });
   }
-  res.json({ baseURL: baseURL(), tables: out });
+  // 外帶 QRcode 貼櫃檯，客人掃了自己點、留稱呼，做好再叫人
+  const takeoutURL = `${baseURL()}/takeout`;
+  const takeout = { url: takeoutURL, qr: await QRCode.toDataURL(takeoutURL, { width: 512, margin: 1 }) };
+  res.json({ baseURL: baseURL(), tables: out, takeout });
+});
+
+/* ---------- 顧客回饋 ---------- */
+// 客人拍的照片另外放一個資料夾，跟菜色照片分開
+const FEEDBACK_IMAGES_DIR = join(IMAGES_DIR, 'feedback');
+mkdirSync(FEEDBACK_IMAGES_DIR, { recursive: true });
+const feedbackUpload = multer({
+  storage: multer.diskStorage({
+    destination: FEEDBACK_IMAGES_DIR,
+    filename: (_req, file, cb) =>
+      cb(null, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${extname(file.originalname).toLowerCase() || '.jpg'}`),
+  }),
+  limits: { fileSize: 8 * 1024 * 1024, files: 3 },
+  fileFilter: (_req, file, cb) =>
+    /^image\/(png|jpe?g|webp|gif|avif|heic|heif)$/.test(file.mimetype) ? cb(null, true) : cb(new Error('只接受圖片檔')),
+});
+
+// 客人送出心得。multipart 欄位：orderId, rating(1~5), comment?, photos[]（最多 3 張）
+// 綁在自己的訂單上：同一張訂單只能留一次，避免路人亂灌
+app.post('/api/feedback', (req, res) => {
+  feedbackUpload.array('photos', 3)(req, res, (err) => {
+    const files = req.files || [];
+    const fail = (msg) => {
+      for (const f of files) rmSync(f.path, { force: true }); // 驗證沒過就把已存的照片清掉
+      return bad(res, msg);
+    };
+    if (err) return fail(err.code === 'LIMIT_FILE_SIZE' ? '照片太大，請小於 8MB' : err.message);
+    const order = orderById(Number(req.body?.orderId));
+    if (!order) return fail('找不到訂單');
+    const rating = Math.round(Number(req.body?.rating));
+    if (!(rating >= 1 && rating <= 5)) return fail('請先給個星等');
+    const comment = String(req.body?.comment || '').trim().slice(0, 300);
+    const dup = db.prepare('SELECT id FROM feedback WHERE session_id = ?').get(order.session_id);
+    if (dup) return fail('這筆訂單已經留過回饋，謝謝您');
+
+    const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(order.session_id);
+    const who = session.kind === 'takeout' ? session.customer.split(' ')[0] : `${session.table_id} 號桌`;
+    const photos = files.map((f) => `/images/feedback/${f.filename}`);
+    db.prepare(
+      'INSERT INTO feedback (session_id, kind, who, rating, comment, photos, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(session.id, session.kind, who, rating, comment, JSON.stringify(photos), now());
+    res.json({ ok: true });
+  });
+});
+
+// 客人查自己這筆消費的回饋（看店家有沒有回覆）。手機只記得訂單編號，用編號找
+app.get('/api/feedback/by-order/:orderId', (req, res) => {
+  const order = orderById(Number(req.params.orderId));
+  if (!order) return res.status(404).json({ error: '找不到訂單' });
+  const f = db.prepare('SELECT * FROM feedback WHERE session_id = ?').get(order.session_id);
+  res.json(f ? { ...f, photos: JSON.parse(f.photos || '[]') } : null);
+});
+
+// 後台：店家回覆客人。body: { reply }；空字串等於撤回回覆
+app.post('/api/admin/feedback/:id/reply', staffOnly, (req, res) => {
+  const f = db.prepare('SELECT * FROM feedback WHERE id = ?').get(Number(req.params.id));
+  if (!f) return res.status(404).json({ error: '回饋不存在' });
+  const reply = String(req.body?.reply || '').trim().slice(0, 500);
+  const repliedAt = reply ? now() : null;
+  db.prepare('UPDATE feedback SET reply = ?, replied_at = ? WHERE id = ?').run(reply, repliedAt, f.id);
+  // 客人的手機還開著的話會即時看到
+  broadcast('feedback:reply', { feedbackId: f.id, sessionId: f.session_id });
+  res.json({ ok: true, reply, replied_at: repliedAt });
+});
+
+// 後台：最近的回饋與平均星等
+app.get('/api/admin/feedback', staffOnly, (_req, res) => {
+  const list = db
+    .prepare('SELECT * FROM feedback ORDER BY id DESC LIMIT 200')
+    .all()
+    .map((f) => ({ ...f, photos: JSON.parse(f.photos || '[]') }));
+  const stats = db.prepare('SELECT COUNT(*) AS count, AVG(rating) AS avg FROM feedback').get();
+  const pending = list.filter((f) => !f.reply).length; // 還沒回的，後台標出來
+  res.json({ count: stats.count, avg: stats.avg ? Math.round(stats.avg * 10) / 10 : 0, pending, list });
+});
+
+app.delete('/api/admin/feedback/:id', staffOnly, (req, res) => {
+  const row = db.prepare('SELECT photos FROM feedback WHERE id = ?').get(Number(req.params.id));
+  if (row) {
+    // 照片一起刪，不留在硬碟占空間
+    for (const url of JSON.parse(row.photos || '[]')) {
+      const name = url.split('/').pop();
+      if (name) rmSync(join(FEEDBACK_IMAGES_DIR, name), { force: true });
+    }
+    db.prepare('DELETE FROM feedback WHERE id = ?').run(Number(req.params.id));
+  }
+  res.json({ ok: true });
 });
 
 /* ---------- 後台：帳單 / 結帳 ---------- */
 app.get('/api/admin/bills', staffOnly, (_req, res) => {
-  const sessions = db.prepare('SELECT * FROM sessions WHERE closed_at IS NULL ORDER BY table_id').all();
-  res.json(
-    sessions.map((s) => {
-      const orders = withItems(
-        db.prepare("SELECT * FROM orders WHERE session_id = ? AND status <> 'cancelled' ORDER BY id").all(s.id)
-      );
-      const table = db.prepare('SELECT * FROM tables WHERE id = ?').get(s.table_id);
-      return { ...s, table, orders, total: orders.reduce((sum, o) => sum + o.total, 0) };
-    })
-  );
+  // 內用依桌號排、外帶依送單先後排在後面
+  const sessions = db
+    .prepare("SELECT * FROM sessions WHERE closed_at IS NULL ORDER BY kind = 'takeout', table_id, id")
+    .all();
+  res.json(sessions.map(billOf));
 });
 
+// 付款方式都是櫃檯實際收款後由店員按的，系統只記錄不串金流
+// （LINE Pay 用店家自己的商家 QR、Apple Pay 走店家的感應刷卡機）
+const PAYMENTS = ['cash', 'card', 'linepay', 'applepay', 'mobile'];
+
+// 結帳。body: { payment, discount?: { type: 'percent'|'amount'|'free', value, reason } }
 app.post('/api/admin/sessions/:id/close', staffOnly, (req, res) => {
   const s = db.prepare('SELECT * FROM sessions WHERE id = ?').get(Number(req.params.id));
   if (!s) return res.status(404).json({ error: '帳單不存在' });
   if (s.closed_at) return bad(res, '此帳單已結清');
 
-  const orders = withItems(
-    db.prepare("SELECT * FROM orders WHERE session_id = ? AND status <> 'cancelled'").all(s.id)
-  );
-  const total = orders.reduce((sum, o) => sum + o.total, 0);
-  const payment = ['cash', 'card', 'mobile'].includes(req.body?.payment) ? req.body.payment : 'cash';
+  const { subtotal } = billOf(s);
+  let disc;
+  try {
+    disc = computeDiscount(subtotal, req.body?.discount);
+  } catch (e) {
+    return bad(res, e.message);
+  }
+  const total = Math.max(0, subtotal - disc.discount);
+  const payment =
+    req.body?.discount?.type === 'free'
+      ? 'free'
+      : PAYMENTS.includes(req.body?.payment)
+        ? req.body.payment
+        : 'cash';
 
-  db.prepare('UPDATE sessions SET closed_at = ?, paid_total = ?, payment = ? WHERE id = ?').run(
-    now(),
-    total,
-    payment,
-    s.id
-  );
+  db.prepare(
+    'UPDATE sessions SET closed_at = ?, paid_total = ?, discount = ?, discount_note = ?, payment = ? WHERE id = ?'
+  ).run(now(), total, disc.discount, disc.note, payment, s.id);
   broadcast('bill:closed', { sessionId: s.id, tableId: s.table_id, total });
-  res.json({ ok: true, total, payment });
+  res.json({ ok: true, subtotal, discount: disc.discount, total, payment });
 });
 
-// 今日營業摘要
-app.get('/api/admin/report', staffOnly, (_req, res) => {
+// 營業摘要。?date=YYYY-MM-DD 看某一天，不帶就是今天。
+// 訂單資料一直留在資料庫裡不會刪，所以前幾天的報表都翻得到。
+app.get('/api/admin/report', staffOnly, (req, res) => {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date) ? req.query.date : null;
+  const dateExpr = date ? '?' : "date('now','localtime')";
+  const dateArgs = date ? [date] : [];
   const closed = db
-    .prepare(
-      "SELECT * FROM sessions WHERE closed_at IS NOT NULL AND date(closed_at,'localtime') = date('now','localtime')"
-    )
-    .all();
+    .prepare(`SELECT * FROM sessions WHERE closed_at IS NOT NULL AND date(closed_at,'localtime') = ${dateExpr}`)
+    .all(...dateArgs);
   const top = db
     .prepare(
       `SELECT oi.name AS name, SUM(oi.qty) AS qty, SUM(oi.qty * oi.price) AS amount
        FROM order_items oi
        JOIN orders o ON o.id = oi.order_id
-       WHERE date(o.created_at,'localtime') = date('now','localtime') AND o.status <> 'cancelled'
+       WHERE date(o.created_at,'localtime') = ${dateExpr} AND o.status <> 'cancelled'
        GROUP BY oi.name ORDER BY qty DESC LIMIT 10`
     )
+    .all(...dateArgs);
+  // 每小時結帳筆數，看尖峰時段
+  const byHour = db
+    .prepare(
+      `SELECT CAST(strftime('%H', closed_at, 'localtime') AS INTEGER) AS hour, COUNT(*) AS count, SUM(paid_total) AS amount
+       FROM sessions WHERE closed_at IS NOT NULL AND date(closed_at,'localtime') = ${dateExpr}
+       GROUP BY hour ORDER BY hour`
+    )
+    .all(...dateArgs);
+  // 最近 30 天每日營業額，當歷史紀錄
+  const days = db
+    .prepare(
+      `SELECT date(closed_at,'localtime') AS date, COUNT(*) AS count, SUM(paid_total) AS revenue,
+              SUM(kind = 'takeout') AS takeoutCount
+       FROM sessions WHERE closed_at IS NOT NULL
+       GROUP BY date ORDER BY date DESC LIMIT 30`
+    )
     .all();
+  const sum = (rows) => rows.reduce((s, c) => s + (c.paid_total || 0), 0);
+  const takeout = closed.filter((c) => c.kind === 'takeout');
+  const dine = closed.filter((c) => c.kind !== 'takeout');
   res.json({
+    date: date || days[0]?.date || null,
     closedCount: closed.length,
-    revenue: closed.reduce((s, c) => s + (c.paid_total || 0), 0),
+    takeoutCount: takeout.length,
+    revenue: sum(closed),
+    discountTotal: closed.reduce((s, c) => s + (c.discount || 0), 0),
+    freeCount: closed.filter((c) => c.payment === 'free').length,
+    // 內用／外帶各自的筆數與金額
+    byKind: [
+      { kind: 'dine', count: dine.length, amount: sum(dine) },
+      { kind: 'takeout', count: takeout.length, amount: sum(takeout) },
+    ],
+    // 各付款方式的筆數與金額，方便老闆對 LINE Pay／刷卡機的入帳
+    byPayment: PAYMENTS.map((payment) => {
+      const rows = closed.filter((c) => c.payment === payment);
+      return { payment, count: rows.length, amount: sum(rows) };
+    }).filter((p) => p.count > 0),
+    byHour,
+    days,
     topItems: top,
   });
 });
@@ -467,9 +682,26 @@ app.get(/^(?!\/api\/).*/, (_req, res, next) => {
   res.sendFile(index);
 });
 
+app.get('/api/health', (_req, res) => res.json({ ok: true }));
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log('\n  餐廳點餐系統已啟動');
   console.log(`  店內網址   ${baseURL()}`);
   console.log(`  廚房看板   ${baseURL()}/kitchen`);
-  console.log(`  後台管理   ${baseURL()}/admin   （店員密碼 ${STAFF_PIN}）\n`);
+  console.log(`  外帶點餐   ${baseURL()}/takeout`);
+  console.log(`  後台管理   ${baseURL()}/admin   （店員密碼 ${staffPin()}）\n`);
+  keepAwake();
 });
+
+// Render 免費方案 15 分鐘沒流量就休眠，客人掃碼要等半分鐘才醒；
+// 自己每 10 分鐘打一次自己的網址，讓它一直醒著。
+// 注意：免費方案沒有永久硬碟，主機只要重啟（重新部署、Render 維護）訂單資料就會歸零，
+// 這招只能減少休眠次數，正式營業還是要用有硬碟的方案（見 README）。
+function keepAwake() {
+  const url = process.env.RENDER_EXTERNAL_URL;
+  if (!url || process.env.KEEP_AWAKE === '0') return;
+  setInterval(() => {
+    fetch(`${url}/api/health`).catch(() => {});
+  }, 10 * 60 * 1000).unref();
+  console.log('  已啟用防休眠：每 10 分鐘自動喚醒一次\n');
+}

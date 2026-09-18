@@ -9,6 +9,6 @@ services:
     startCommand: npm start
     envVars:
       - key: STAFF_PIN
-        value: beefnoodle123
+        value: "882266"   # 只能用數字（手機登入用數字鍵盤）；也可以之後在後台「今日報表」頁改
       # PUBLIC_URL 不用設：程式會自動讀 Render 給的 RENDER_EXTERNAL_URL，
       # QRcode 就會指向正確的線上網址。

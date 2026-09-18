@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import StaffGate from '../components/StaffGate.vue'
-import { api, clockTime, subscribe, type Order } from '../api'
+import { api, clockTime, orderTitle, subscribe, type Order } from '../api'
 
 const orders = ref<Order[]>([])
 const error = ref('')
@@ -122,7 +122,7 @@ onUnmounted(() => {
           <p v-if="!pending.length" class="empty muted">目前沒有新訂單</p>
           <article v-for="o in pending" :key="o.id" class="card ticket" :class="{ late: waited(o.created_at).late }">
             <header>
-              <span class="table">{{ o.table_id }} 號桌</span>
+              <span class="table" :class="{ takeout: o.kind === 'takeout' }">{{ orderTitle(o) }}<small v-if="o.kind === 'takeout'"> #{{ o.id }}</small></span>
               <span class="time">{{ clockTime(o.created_at) }}・等候 {{ waited(o.created_at).mins }} 分</span>
             </header>
             <ul>
@@ -152,7 +152,7 @@ onUnmounted(() => {
             :class="{ late: waited(o.created_at).late }"
           >
             <header>
-              <span class="table">{{ o.table_id }} 號桌</span>
+              <span class="table" :class="{ takeout: o.kind === 'takeout' }">{{ orderTitle(o) }}<small v-if="o.kind === 'takeout'"> #{{ o.id }}</small></span>
               <span class="time">{{ clockTime(o.created_at) }}・等候 {{ waited(o.created_at).mins }} 分</span>
             </header>
             <ul>
@@ -252,6 +252,14 @@ onUnmounted(() => {
 .table {
   font-size: 26px;
   font-weight: 800;
+}
+.table.takeout {
+  color: var(--brand-dark);
+}
+.table small {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--muted);
 }
 .time {
   color: var(--muted);
