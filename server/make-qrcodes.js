@@ -27,7 +27,7 @@ function lanIP() {
 const base = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://${lanIP()}:${PORT}`;
 // 部署在雲端（https）時，客人用手機網路就能點；區網版才需要連店內 WiFi
 const isCloud = base.startsWith('https://');
-const tables = db.prepare('SELECT * FROM tables ORDER BY id').all();
+const tables = await db.prepare('SELECT * FROM tables ORDER BY id').all();
 
 const cards = await Promise.all(
   tables.map(async (t) => {

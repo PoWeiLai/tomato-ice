@@ -161,38 +161,47 @@ public/images/          菜色照片
 
 ### 備份
 
-整個系統的資料都在 `data/restaurant.db` 這一個檔案，關掉程式後複製走即可。
+後台「今日報表」頁按**「下載備份」**會拿到一份 JSON（每個資料表一個陣列，照片不含在內）。
+本機模式的資料也都在 `data/restaurant.db` 這一個檔案，關掉程式後複製走即可。
+用 Turso 的話，資料本來就在雲端，Turso 後台另外有還原點可用。
 
 ## 部署到雲端（交付給店家）
 
 在店內電腦跑 `npm start` 的模式，電腦一關店家就不能點餐。若要交付給店家自行營運、
-與開發者的電腦脫鉤，就把系統部署到 24 小時運作的主機上（以下以 Zeabur 為例）。
+與開發者的電腦脫鉤，就把系統部署到 24 小時運作的主機上。
+
+**資料放哪裡**：主機本身不一定有永久硬碟（Render 免費版就沒有），所以訂單、帳單、
+店家上傳的照片、客人拍的回饋照片全部存在 **Turso**（雲端 SQLite，免費方案就夠一家店用）。
+主機重啟、重新部署都不會掉資料。沒設 Turso 的話程式會退回用本機檔案 `data/restaurant.db`。
 
 ### 步驟
 
 1. 把這個專案推上 GitHub
-2. Zeabur 建立 Project → Add Service → 選 GitHub → 選這個 repo
+2. 建 Turso 資料庫（免費）：
+   - 到 <https://turso.tech> 註冊 → **Create Database**，地區選 **Singapore**（離台灣最近）
+   - 拿兩個值：**Database URL**（`libsql://xxx.turso.io`）和 **Token**（Generate Token，選不會過期的）
+   - 也可以用 CLI：`turso db create restaurant --location sin`、`turso db show restaurant --url`、`turso db tokens create restaurant`
+3. 主機（Render / Zeabur / 其他）建立服務，選 GitHub → 這個 repo
    （會自動偵測 `package.json`，跑 `npm run build` 再 `npm start`）
-3. **掛 Volume**（不做這步，主機一重啟訂單和照片全沒了）
-   - Mount Directory 填 `/data`
 4. 設定環境變數：
 
    | 變數 | 值 | 用途 |
    | --- | --- | --- |
-   | `STAFF_PIN` | 自訂密碼 | 店員登入 `/admin`、`/kitchen`，**一定要改掉預設的 1234** |
-   | `DATA_DIR` | `/data/db` | 訂單資料庫存放位置，指向 Volume |
-   | `IMAGES_DIR` | `/data/images` | 店家上傳的菜色照片，指向 Volume |
-   | `PUBLIC_URL` | `https://你的網址` | QRcode 裡要寫的網址 |
+   | `TURSO_DATABASE_URL` | `libsql://xxx.turso.io` | 資料庫位置，**沒設就只會存在主機本機，重啟會掉** |
+   | `TURSO_AUTH_TOKEN` | Turso 給的 token | 資料庫密碼 |
+   | `STAFF_PIN` | 4～8 位數字 | 店員登入 `/admin`、`/kitchen` 的預設密碼（後台可再改） |
+   | `PUBLIC_URL` | `https://你的網址` | QRcode 裡要寫的網址（Render 不用設，會自動抓） |
    | `TABLE_COUNT` | `6` | 內用桌數（預設 6 桌），改了重啟即生效 |
+   | `TZ_OFFSET_HOURS` | `8` | 報表分天用的時差，台灣是 +8（預設值，不用設） |
 
-5. 開 Domain 拿到網址後，回填 `PUBLIC_URL` 再重新部署一次
+5. 開 Domain 拿到網址後，回填 `PUBLIC_URL` 再重新部署一次（Render 免）
 6. 進 `/admin` →「QRcode 列印」→ 列印全部 → 貼到桌上
 
 ### 第一次啟動會自動做的事
 
-- 建立資料庫、開 1～10 號桌
+- 在 Turso 建好所有資料表、開內用桌與外帶保留桌
 - 菜單是空的就自動匯入 `server/menu.seed.json`（8 個分類、61 道菜）
-- Volume 是空的就把內建菜色照片複製進去
+- 內建菜色照片跟著程式走（`public/images/`），店家後來上傳的才存進資料庫
 
 所以部署完直接就能用，不必另外跑 `npm run seed:menu`。
 
@@ -204,23 +213,21 @@ public/images/          菜色照片
 ### 注意
 
 - 部署到雲端後，**店家網路斷線就不能點餐**（跑在店內電腦的模式則不受影響）
-- 免費方案沒有 Volume，資料會在主機重啟時被清空，**只能拿來展示，不能真的營業**
+- 一定要設 `TURSO_DATABASE_URL`，否則資料只存在主機上，免費方案一重啟就清空
 - 目前是單店設計。第二家店要另外開一個 Project，不能共用同一個網址
 
-### 用 Render 部署（免費方案，僅供展示）
+### 用 Render 部署（免費方案 + Turso）
 
 專案根目錄的 `render.yaml` 已寫好設定，到 Render 按 **New → Blueprint** 選這個 repo
-即可自動建立服務、帶入 `STAFF_PIN`。`PUBLIC_URL` 不用設，程式會自動讀 Render 提供的
-`RENDER_EXTERNAL_URL`，QRcode 就會指向線上網址。
+即可自動建立服務，建立時會問你 `TURSO_DATABASE_URL` 和 `TURSO_AUTH_TOKEN`，把 Turso 給的值貼上。
+已經建好的服務則到 Render → 該服務 → **Environment** 手動加這兩個變數，存檔會自動重新部署。
+`PUBLIC_URL` 不用設，程式會自動讀 Render 提供的 `RENDER_EXTERNAL_URL`，QRcode 就會指向線上網址。
 
-免費方案的限制讓它**只能展示、不能營業**：
+啟動 log 第二行會印「資料庫 Turso（雲端，永久保存）」，看到這行才代表有接上。
+
+Render 免費方案本身的限制：
 
 - 15 分鐘沒流量就休眠，下次開啟要等約 1 分鐘
-  （程式在 Render 上會每 10 分鐘自己喚醒自己一次，平常不太會睡；不想要可設 `KEEP_AWAKE=0`。
-  但 Render 維護或重新部署時還是會重啟，重啟就會遇到下一條的問題）
-- 沒有永久硬碟，重新部署或重啟會清空訂單與店家上傳的照片
-  （內建菜單與照片會自動重新匯入，畫面仍是完整的）
+  （程式在 Render 上會每 10 分鐘自己喚醒自己一次，平常不太會睡；不想要可設 `KEEP_AWAKE=0`）
 - 每月 750 小時額度
-
-要正式交付給店家營業，改用有永久硬碟的付費方案或其他主機，並依前一節設定
-`DATA_DIR` / `IMAGES_DIR`。
+- 沒有永久硬碟——但資料都在 Turso，所以重啟、重新部署都不影響訂單與照片

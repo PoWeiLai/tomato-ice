@@ -14,6 +14,7 @@
     "qrcodes": "node server/make-qrcodes.js"
   },
   "dependencies": {
+    "@libsql/client": "^0.18.0",
     "express": "^5.2.1",
     "multer": "^2.3.0",
     "qrcode": "^1.5.4",

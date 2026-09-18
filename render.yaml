@@ -10,5 +10,11 @@ services:
     envVars:
       - key: STAFF_PIN
         value: "882266"   # 只能用數字（手機登入用數字鍵盤）；也可以之後在後台「今日報表」頁改
+      # 資料存在 Turso（雲端 SQLite），主機沒有硬碟也不會掉訂單和照片。
+      # 這兩個值是機密，不寫在檔案裡：建 Blueprint 時 Render 會問，或到服務的 Environment 頁手動加。
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
       # PUBLIC_URL 不用設：程式會自動讀 Render 給的 RENDER_EXTERNAL_URL，
       # QRcode 就會指向正確的線上網址。

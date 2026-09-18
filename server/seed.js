@@ -11,51 +11,63 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export function seedMenu() {
   const seed = JSON.parse(readFileSync(join(__dirname, 'menu.seed.json'), 'utf8'));
 
-  db.exec('DELETE FROM item_option_groups');
-  db.exec('DELETE FROM option_choices');
-  db.exec('DELETE FROM option_groups');
-  db.exec('DELETE FROM menu_items');
-  db.exec('DELETE FROM categories');
+  // 整包放在同一個交易裡：中途出錯就全部回滾，不會留下半套菜單
+  return db.transaction(async (tx) => {
+    await tx.exec(`
+      DELETE FROM item_option_groups;
+      DELETE FROM option_choices;
+      DELETE FROM option_groups;
+      DELETE FROM menu_items;
+      DELETE FROM categories;
+    `);
 
-  /* 選項群組 */
-  const insGroup = db.prepare('INSERT INTO option_groups (key, name, mode, required, sort) VALUES (?, ?, ?, ?, ?)');
-  const insChoice = db.prepare('INSERT INTO option_choices (group_id, name, price_delta, sort) VALUES (?, ?, ?, ?)');
-  const groupIdByKey = new Map();
+    /* 選項群組 */
+    const insGroup = tx.prepare('INSERT INTO option_groups (key, name, mode, required, sort) VALUES (?, ?, ?, ?, ?)');
+    const insChoice = tx.prepare('INSERT INTO option_choices (group_id, name, price_delta, sort) VALUES (?, ?, ?, ?)');
+    const groupIdByKey = new Map();
 
-  (seed.optionGroups || []).forEach((g, gi) => {
-    const id = insGroup.run(g.key, g.name, g.mode || 'single', g.required ? 1 : 0, gi).lastInsertRowid;
-    groupIdByKey.set(g.key, id);
-    (g.choices || []).forEach((c, ci) => insChoice.run(id, c.name, Math.round(c.price_delta || 0), ci));
+    for (const [gi, g] of (seed.optionGroups || []).entries()) {
+      const { lastInsertRowid: id } = await insGroup.run(g.key, g.name, g.mode || 'single', g.required ? 1 : 0, gi);
+      groupIdByKey.set(g.key, id);
+      for (const [ci, c] of (g.choices || []).entries()) {
+        await insChoice.run(id, c.name, Math.round(c.price_delta || 0), ci);
+      }
+    }
+
+    /* 分類與品項 */
+    const insCat = tx.prepare('INSERT INTO categories (name, sort) VALUES (?, ?)');
+    const insItem = tx.prepare(
+      'INSERT INTO menu_items (category_id, name, description, price, image, available, sort) VALUES (?, ?, ?, ?, ?, 1, ?)'
+    );
+    const linkGroup = tx.prepare('INSERT INTO item_option_groups (item_id, group_id, sort) VALUES (?, ?, ?)');
+
+    let itemCount = 0;
+    for (const [ci, cat] of seed.categories.entries()) {
+      const { lastInsertRowid: catId } = await insCat.run(cat.name, ci);
+      for (const [ii, it] of (cat.items || []).entries()) {
+        const { lastInsertRowid: itemId } = await insItem.run(
+          catId,
+          it.name,
+          it.description || '',
+          Math.round(it.price),
+          it.image || '',
+          ii
+        );
+        for (const [oi, key] of (it.options || []).entries()) {
+          const groupId = groupIdByKey.get(key);
+          if (!groupId) throw new Error(`「${it.name}」引用了不存在的選項群組：${key}`);
+          await linkGroup.run(itemId, groupId, oi);
+        }
+        itemCount++;
+      }
+    }
+
+    return { categories: seed.categories.length, items: itemCount, groups: groupIdByKey.size };
   });
-
-  /* 分類與品項 */
-  const insCat = db.prepare('INSERT INTO categories (name, sort) VALUES (?, ?)');
-  const insItem = db.prepare(
-    'INSERT INTO menu_items (category_id, name, description, price, image, available, sort) VALUES (?, ?, ?, ?, ?, 1, ?)'
-  );
-  const linkGroup = db.prepare('INSERT INTO item_option_groups (item_id, group_id, sort) VALUES (?, ?, ?)');
-
-  let itemCount = 0;
-  seed.categories.forEach((cat, ci) => {
-    const catId = insCat.run(cat.name, ci).lastInsertRowid;
-    (cat.items || []).forEach((it, ii) => {
-      const itemId = insItem
-        .run(catId, it.name, it.description || '', Math.round(it.price), it.image || '', ii)
-        .lastInsertRowid;
-      (it.options || []).forEach((key, oi) => {
-        const groupId = groupIdByKey.get(key);
-        if (!groupId) throw new Error(`「${it.name}」引用了不存在的選項群組：${key}`);
-        linkGroup.run(itemId, groupId, oi);
-      });
-      itemCount++;
-    });
-  });
-
-  return { categories: seed.categories.length, items: itemCount, groups: groupIdByKey.size };
 }
 
 // 直接執行這個檔案時才跑（被 import 時不動作）
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const r = seedMenu();
+  const r = await seedMenu();
   console.log(`✓ 匯入完成：${r.categories} 個分類、${r.items} 道菜、${r.groups} 個選項群組`);
 }

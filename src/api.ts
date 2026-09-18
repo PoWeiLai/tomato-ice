@@ -237,7 +237,7 @@ export async function downloadBackup() {
     throw new ApiError(res.status, data?.error || `備份失敗（${res.status}）`)
   }
   const name =
-    res.headers.get('content-disposition')?.match(/filename="?([^";]+)/)?.[1] || 'restaurant-backup.db'
+    res.headers.get('content-disposition')?.match(/filename="?([^";]+)/)?.[1] || 'restaurant-backup.json'
   const url = URL.createObjectURL(await res.blob())
   const a = document.createElement('a')
   a.href = url

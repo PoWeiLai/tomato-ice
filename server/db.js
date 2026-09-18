@@ -1,11 +1,69 @@
-import { DatabaseSync } from 'node:sqlite';
+// 資料庫連線。
+// 雲端：設 TURSO_DATABASE_URL + TURSO_AUTH_TOKEN，資料存在 Turso（永久保存，主機重啟不會消失）。
+// 本機：沒設的話就用 data/restaurant.db 這個檔案，開發測試不必連網。
+import { createClient } from '@libsql/client';
 import { DB_PATH } from './paths.js';
 
-export const db = new DatabaseSync(DB_PATH);
-db.exec('PRAGMA journal_mode = WAL');
-db.exec('PRAGMA foreign_keys = ON');
+const TURSO_URL = process.env.TURSO_DATABASE_URL;
+export const IS_REMOTE = Boolean(TURSO_URL);
 
-db.exec(`
+const client = IS_REMOTE
+  ? createClient({ url: TURSO_URL, authToken: process.env.TURSO_AUTH_TOKEN })
+  : createClient({ url: `file:${DB_PATH}` });
+
+// 報表要用店家當地的日期分天。Turso 主機在國外，SQLite 的 'localtime' 會變成 UTC，
+// 所以一律用固定時差換算，預設台灣 +8。
+const TZ_OFFSET_HOURS = Number(process.env.TZ_OFFSET_HOURS ?? 8);
+export const LOCAL = `'${TZ_OFFSET_HOURS >= 0 ? '+' : '-'}${Math.abs(TZ_OFFSET_HOURS)} hours'`;
+
+/**
+ * 仿 better-sqlite3 的極簡包裝，差別只在每個呼叫都要 await：
+ *   await db.prepare(sql).get(...args)   → 一列或 undefined
+ *   await db.prepare(sql).all(...args)   → 陣列
+ *   await db.prepare(sql).run(...args)   → { lastInsertRowid, changes }
+ *   await db.exec(sql)                   → 可一次跑多句
+ *   await db.transaction(async (tx) => …) → tx 同樣有 prepare，中途丟錯就整包回滾
+ */
+function wrap(executor) {
+  const execute = (sql, args) => executor.execute({ sql, args });
+  return {
+    prepare(sql) {
+      return {
+        get: async (...args) => (await execute(sql, args)).rows[0],
+        all: async (...args) => (await execute(sql, args)).rows,
+        run: async (...args) => {
+          const r = await execute(sql, args);
+          return { lastInsertRowid: Number(r.lastInsertRowid), changes: r.rowsAffected };
+        },
+      };
+    },
+    exec: (sql) => executor.executeMultiple(sql),
+  };
+}
+
+export const db = {
+  ...wrap(client),
+  async transaction(fn) {
+    const tx = await client.transaction('write');
+    try {
+      const result = await fn(wrap(tx));
+      await tx.commit();
+      return result;
+    } catch (e) {
+      await tx.rollback().catch(() => {});
+      throw e;
+    } finally {
+      tx.close();
+    }
+  },
+};
+
+if (!IS_REMOTE) {
+  await db.exec('PRAGMA journal_mode = WAL');
+  await db.exec('PRAGMA foreign_keys = ON');
+}
+
+await db.exec(`
 CREATE TABLE IF NOT EXISTS categories (
   id       INTEGER PRIMARY KEY AUTOINCREMENT,
   name     TEXT NOT NULL UNIQUE,
@@ -109,35 +167,45 @@ CREATE TABLE IF NOT EXISTS feedback (
   created_at TEXT NOT NULL
 );
 
+-- 店家上傳的菜色照片與客人拍的回饋照片，直接存進資料庫，
+-- 這樣主機沒有永久硬碟（Render 免費版）也不會弄丟
+CREATE TABLE IF NOT EXISTS images (
+  name       TEXT PRIMARY KEY,               -- 檔名，網址是 /images/<name>
+  mime       TEXT NOT NULL,
+  data       BLOB NOT NULL,
+  created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_orders_session ON orders(session_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status  ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_items_order    ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_menu_category  ON menu_items(category_id);
 `);
 
-// 舊資料庫補欄位（新版加了選項功能）
-const orderItemCols = db.prepare('PRAGMA table_info(order_items)').all().map((c) => c.name);
-if (!orderItemCols.includes('options')) {
-  db.exec("ALTER TABLE order_items ADD COLUMN options TEXT NOT NULL DEFAULT '[]'");
+// 舊資料庫補欄位。用 pragma_table_info() 這種查法遠端資料庫也能用
+const columnsOf = async (table) =>
+  (await db.prepare(`SELECT name FROM pragma_table_info(?)`).all(table)).map((c) => c.name);
+
+// 新版加了選項功能
+if (!(await columnsOf('order_items')).includes('options')) {
+  await db.exec("ALTER TABLE order_items ADD COLUMN options TEXT NOT NULL DEFAULT '[]'");
 }
 
-// 舊資料庫補欄位（回饋加了照片）
-const feedbackCols = db.prepare('PRAGMA table_info(feedback)').all().map((c) => c.name);
+// 回饋加了照片、店家回覆
+const feedbackCols = await columnsOf('feedback');
 if (!feedbackCols.includes('photos')) {
-  db.exec("ALTER TABLE feedback ADD COLUMN photos TEXT NOT NULL DEFAULT '[]'");
+  await db.exec("ALTER TABLE feedback ADD COLUMN photos TEXT NOT NULL DEFAULT '[]'");
 }
-// 舊資料庫補欄位（回饋加了店家回覆）
 if (!feedbackCols.includes('reply')) {
-  db.exec(`
+  await db.exec(`
     ALTER TABLE feedback ADD COLUMN reply TEXT NOT NULL DEFAULT '';
     ALTER TABLE feedback ADD COLUMN replied_at TEXT;
   `);
 }
 
-// 舊資料庫補欄位（新版加了外帶與折扣）
-const sessionCols = db.prepare('PRAGMA table_info(sessions)').all().map((c) => c.name);
-if (!sessionCols.includes('kind')) {
-  db.exec(`
+// 新版加了外帶與折扣
+if (!(await columnsOf('sessions')).includes('kind')) {
+  await db.exec(`
     ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'dine';
     ALTER TABLE sessions ADD COLUMN customer TEXT NOT NULL DEFAULT '';
     ALTER TABLE sessions ADD COLUMN discount INTEGER NOT NULL DEFAULT 0;
@@ -150,17 +218,18 @@ if (!sessionCols.includes('kind')) {
 export const TABLE_COUNT = Math.max(1, Number(process.env.TABLE_COUNT) || 6);
 {
   const ins = db.prepare('INSERT OR IGNORE INTO tables (id, name, seats) VALUES (?, ?, ?)');
-  for (let i = 1; i <= TABLE_COUNT; i++) ins.run(i, `${i} 號桌`, 4);
-  db.prepare(
-    'DELETE FROM tables WHERE id > ? AND id NOT IN (SELECT DISTINCT table_id FROM sessions)'
-  ).run(TABLE_COUNT);
+  for (let i = 1; i <= TABLE_COUNT; i++) await ins.run(i, `${i} 號桌`, 4);
+  await db
+    .prepare('DELETE FROM tables WHERE id > ? AND id NOT IN (SELECT DISTINCT table_id FROM sessions)')
+    .run(TABLE_COUNT);
 }
 
 /** 外帶用的保留桌號：所有外帶單都掛在這一桌底下，列桌子時要排除 */
 export const TAKEOUT_TABLE_ID = 0;
-db.prepare('INSERT OR IGNORE INTO tables (id, name, seats) VALUES (?, ?, 0)').run(TAKEOUT_TABLE_ID, '外帶');
+await db.prepare('INSERT OR IGNORE INTO tables (id, name, seats) VALUES (?, ?, 0)').run(TAKEOUT_TABLE_ID, '外帶');
 
-export const getSetting = (key) => db.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value;
+export const getSetting = async (key) =>
+  (await db.prepare('SELECT value FROM settings WHERE key = ?').get(key))?.value;
 export const setSetting = (key, value) =>
   db
     .prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
