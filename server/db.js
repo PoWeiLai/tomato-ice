@@ -5,34 +5,40 @@ import { createClient } from '@libsql/client';
 import { DB_PATH } from './paths.js';
 
 const TURSO_URL = process.env.TURSO_DATABASE_URL;
-export const IS_REMOTE = Boolean(TURSO_URL);
 
-// 設定填錯時給人看得懂的提示，不要噴一整頁英文堆疊
-function die(msg) {
-  console.error(`\n  ✗ Turso 設定有誤：${msg}\n    到主機的環境變數頁檢查 TURSO_DATABASE_URL 與 TURSO_AUTH_TOKEN（見 README「部署到雲端」）\n`);
-  process.exit(1);
+/** Turso 設定有問題時的說明，空字串代表正常。/api/health 會一併回傳，線上一看就知道 */
+export let DB_WARNING = '';
+export let IS_REMOTE = Boolean(TURSO_URL);
+
+// 設定填錯時給人看得懂的提示，然後退回本機檔案繼續開店，不要直接結束。
+// 直接結束的話 Render 會判定「新版起不來」而一直掛著舊版，問題反而更難發現。
+function warn(msg) {
+  DB_WARNING = `Turso 設定有誤：${msg}。目前暫時存在主機本機，主機重啟會掉資料！請到主機的環境變數頁檢查 TURSO_DATABASE_URL 與 TURSO_AUTH_TOKEN（見 README「部署到雲端」）`;
+  console.error(`\n  ✗ ${DB_WARNING}\n`);
+  IS_REMOTE = false;
 }
 if (IS_REMOTE) {
   const token = process.env.TURSO_AUTH_TOKEN || '';
   if (!/^libsql:\/\/[\w.-]+\.turso\.io$/.test(TURSO_URL) && !/^https?:\/\//.test(TURSO_URL)) {
-    die(`TURSO_DATABASE_URL 格式不對，應該是 libsql://xxx-你的帳號.turso.io，現在是「${TURSO_URL}」`);
-  }
-  if (!token) die('TURSO_AUTH_TOKEN 沒填');
-  if (!/^[\x21-\x7e]+$/.test(token)) die('TURSO_AUTH_TOKEN 裡有中文或空白，請貼 Turso 後台 Generate Token 產生的那一整串英數字');
+    warn(`TURSO_DATABASE_URL 格式不對，應該是 libsql://xxx-你的帳號.turso.io，現在是「${TURSO_URL}」`);
+  } else if (!token) warn('TURSO_AUTH_TOKEN 沒填');
+  else if (!/^[\x21-\x7e]+$/.test(token)) warn('TURSO_AUTH_TOKEN 裡有中文或空白，請貼 Turso 後台 Generate Token 產生的那一整串英數字');
 }
 
-const client = IS_REMOTE
+const localClient = () => createClient({ url: `file:${DB_PATH}` });
+let client = IS_REMOTE
   ? createClient({ url: TURSO_URL, authToken: process.env.TURSO_AUTH_TOKEN })
-  : createClient({ url: `file:${DB_PATH}` });
+  : localClient();
 
 if (IS_REMOTE) {
   try {
     await client.execute('SELECT 1');
   } catch (e) {
     const m = String(e.message || e);
-    if (/401|unauthorized|jwt|token/i.test(m)) die('Turso 拒絕這個 token（401），請確認是這個資料庫產生的 token，且沒有過期');
-    if (/ENOTFOUND|getaddrinfo|404/.test(m)) die(`找不到這個資料庫網址：${TURSO_URL}`);
-    die(m);
+    if (/401|unauthorized|jwt|token/i.test(m)) warn('Turso 拒絕這個 token（401），請確認是這個資料庫產生的 token，且沒有過期');
+    else if (/ENOTFOUND|getaddrinfo|404/.test(m)) warn(`找不到這個資料庫網址：${TURSO_URL}`);
+    else warn(m);
+    client = localClient();
   }
 }
 

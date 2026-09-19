@@ -5,7 +5,7 @@ import os from 'node:os';
 import { existsSync } from 'node:fs';
 import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { db, now, getSetting, setSetting, TAKEOUT_TABLE_ID, TABLE_COUNT, LOCAL, IS_REMOTE } from './db.js';
+import { db, now, getSetting, setSetting, TAKEOUT_TABLE_ID, TABLE_COUNT, LOCAL, IS_REMOTE, DB_WARNING } from './db.js';
 import { IMAGES_DIR } from './paths.js';
 import { seedMenu } from './seed.js';
 import { sseHandler, broadcast } from './events.js';
@@ -851,7 +851,9 @@ app.get(/^(?!\/api\/).*/, (_req, res, next) => {
 });
 
 // db 欄位讓人從外面就能確認有沒有接上 Turso（turso = 永久保存；file = 存在主機上，重啟會掉）
-app.get('/api/health', (_req, res) => res.json({ ok: true, db: IS_REMOTE ? 'turso' : 'file' }));
+app.get('/api/health', (_req, res) =>
+  res.json({ ok: true, db: IS_REMOTE ? 'turso' : 'file', ...(DB_WARNING ? { warning: DB_WARNING } : {}) }),
+);
 
 app.use(onError);
 
