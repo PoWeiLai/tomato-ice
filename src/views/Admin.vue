@@ -294,6 +294,19 @@ function changePin() {
   }, '密碼已更新，其他裝置（廚房平板等）要用新密碼重新登入')
 }
 
+/* ---------- 老闆手機（忘記密碼時用來驗證身分） ---------- */
+const ownerPhone = ref('')
+const ownerPhoneSaved = ref('')
+const loadOwnerPhone = async () => {
+  ownerPhone.value = ownerPhoneSaved.value = (await api.ownerPhone()).phone
+}
+function saveOwnerPhone() {
+  run(async () => {
+    const { phone } = await api.setOwnerPhone(ownerPhone.value)
+    ownerPhone.value = ownerPhoneSaved.value = phone
+  }, ownerPhone.value.trim() ? '手機已登記，忘記密碼時輸入這支號碼就能重設' : '已取消登記，忘記密碼將無法自助重設')
+}
+
 const backupBusy = ref(false)
 async function saveBackup() {
   backupBusy.value = true
@@ -307,7 +320,10 @@ function openTab(next: Tab) {
   tab.value = next
   if (next === 'qrcode' && !qr.value) run(loadQr)
   if (next === 'bills') run(loadBills)
-  if (next === 'report') run(loadReport)
+  if (next === 'report') {
+    run(loadReport)
+    run(loadOwnerPhone)
+  }
   if (next === 'feedback') run(loadFeedback)
 }
 
@@ -689,6 +705,21 @@ onUnmounted(unsubscribe)
         </section>
         <section class="card pad backup">
           <div>
+            <h2>老闆手機</h2>
+            <p class="muted">
+              忘記店員密碼時，在登入畫面按「忘記密碼」輸入這支號碼就能重設。
+              <strong v-if="!ownerPhoneSaved" class="warn-text">目前未登記，忘記密碼會沒辦法自己重設。</strong>
+            </p>
+          </div>
+          <form class="row pin-form" @submit.prevent="saveOwnerPhone">
+            <input v-model="ownerPhone" type="tel" inputmode="numeric" placeholder="例：0912345678" autocomplete="tel" />
+            <button class="btn-primary" type="submit" :disabled="ownerPhone.replace(/\D/g, '') === ownerPhoneSaved">
+              {{ ownerPhoneSaved ? '更新' : '登記' }}
+            </button>
+          </form>
+        </section>
+        <section class="card pad backup">
+          <div>
             <h2>資料備份</h2>
             <p class="muted">
               下載後請存到自己的電腦或雲端硬碟。建議每月做一次，萬一系統出狀況才有東西可以還原。
@@ -1002,6 +1033,9 @@ code {
 }
 .pin-form input {
   max-width: 160px;
+}
+.warn-text {
+  color: #b3261e;
 }
 .lines {
   list-style: none;

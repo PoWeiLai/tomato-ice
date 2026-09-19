@@ -179,6 +179,13 @@ export const api = {
 
   login: (pin: string) => request<{ ok: true }>('/staff/login', { method: 'POST', body: { pin } }),
   changePin: (pin: string) => request<{ ok: true }>('/admin/pin', { method: 'POST', body: { pin } }),
+  // 忘記密碼：輸入後台登記的老闆手機就能設新密碼（沒登記的話 available 是 false）
+  resetAvailable: () => request<{ available: boolean }>('/staff/reset'),
+  resetPin: (phone: string, pin: string) =>
+    request<{ ok: true }>('/staff/reset', { method: 'POST', body: { phone, pin } }),
+  ownerPhone: () => request<{ phone: string }>('/admin/owner-phone'),
+  setOwnerPhone: (phone: string) =>
+    request<{ ok: true; phone: string }>('/admin/owner-phone', { method: 'POST', body: { phone } }),
 
   kitchenOrders: (scope: 'active' | 'all' = 'active') => request<Order[]>(`/kitchen/orders?scope=${scope}`),
   setOrderStatus: (id: number, status: OrderStatus) =>

@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { api, type Table } from '../api'
-import { STORE, MAP_EMBED_URL, MAP_LINK } from '../store'
+import { PRESS } from '../store'
+import StoreMap from '../components/StoreMap.vue'
+import PressCard from '../components/PressCard.vue'
 
 const tables = ref<Table[]>([])
 onMounted(async () => {
@@ -34,23 +36,13 @@ onMounted(async () => {
       </RouterLink>
     </div>
 
-    <!-- 店家位置：Google 地圖內嵌，地址在 src/store.ts 改 -->
-    <section class="card map">
-      <div class="map-head">
-        <div>
-          <h2>店家位置</h2>
-          <p class="muted">{{ STORE.address || STORE.name }}<span v-if="STORE.phone">　{{ STORE.phone }}</span></p>
-          <p v-if="STORE.hours" class="muted small">營業時間 {{ STORE.hours }}</p>
-        </div>
-        <a class="btn-primary nav" :href="MAP_LINK" target="_blank" rel="noopener">導航</a>
-      </div>
-      <iframe
-        :src="MAP_EMBED_URL"
-        :title="`${STORE.name} 地圖`"
-        loading="lazy"
-        referrerpolicy="no-referrer-when-downgrade"
-        allowfullscreen
-      ></iframe>
+    <!-- 店家位置：地址在 src/store.ts 改 -->
+    <StoreMap class="map" />
+
+    <!-- 部落格報導：文章清單在 src/store.ts 的 PRESS 改 -->
+    <section v-if="PRESS.length" class="press">
+      <h2 class="sub">媒體報導</h2>
+      <PressCard v-for="p in PRESS" :key="p.url" v-bind="p" />
     </section>
 
     <h2 class="sub">各桌點餐頁（測試用）</h2>
@@ -119,39 +111,14 @@ onMounted(async () => {
   color: var(--brand);
 }
 .map {
-  overflow: hidden;
   margin-bottom: 32px;
-}
-.map-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 20px;
-}
-.map-head h2 {
-  margin: 0 0 4px;
-  font-size: 18px;
-}
-.map-head p {
-  margin: 0;
-}
-.map .nav {
-  flex: 0 0 auto;
-  padding: 10px 18px;
-  border-radius: 999px;
-  text-decoration: none;
-}
-.map iframe {
-  display: block;
-  width: 100%;
-  height: 260px;
-  border: 0;
-  border-top: 1px solid var(--line);
 }
 .sub {
   font-size: 18px;
   margin-bottom: 12px;
+}
+.press {
+  margin-bottom: 32px;
 }
 .tables {
   display: grid;

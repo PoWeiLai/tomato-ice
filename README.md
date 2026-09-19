@@ -47,6 +47,16 @@ set STAFF_PIN=882266 && npm start        # Windows cmd
 $env:STAFF_PIN='882266'; npm start        # PowerShell
 ```
 
+### 忘記密碼
+
+改完密碼後，**順便到同一頁的「老闆手機」登記手機號碼**。忘記密碼時，登入畫面按「忘記密碼？」，
+輸入登記的手機號碼就能設定新密碼並直接登入。不發簡訊（不必申請簡訊服務、不用付費），
+只是拿手機號碼當驗證問題，所以請登記老闆本人的手機，不要登記店裡公開的電話。
+連續輸錯 5 次會鎖 15 分鐘。
+
+沒登記手機的話就不能自助重設，只能找系統提供者用環境變數 `STAFF_PIN` 或直接改資料庫。
+（也可以用環境變數 `OWNER_PHONE` 預先指定；後台登記過的話以後台為準。）
+
 ### IP 會變怎麼辦
 
 路由器每次可能配不同 IP，QRcode 就失效了。建議在路由器把這台電腦設成**固定 IP**（DHCP 保留）。
@@ -155,7 +165,7 @@ public/images/          菜色照片
 
 - `tables` — 1～10 號桌；0 號是外帶保留桌，不會出現在 QRcode 與桌號列表
 - `sessions` — 一桌從入座到結帳為一個 session，帳單以此結算；外帶每張單各自一個 session，並記錄折扣金額與原因
-- `settings` — 店家設定（目前只有後台改過的店員密碼）
+- `settings` — 店家設定（後台改過的店員密碼、忘記密碼用的老闆手機）
 - `orders` / `order_items` — 訂單與明細，明細存下單當下的品名與價格
 - `categories` / `menu_items` — 菜單
 
@@ -190,6 +200,7 @@ public/images/          菜色照片
    | `TURSO_DATABASE_URL` | `libsql://xxx.turso.io` | 資料庫位置，**沒設就只會存在主機本機，重啟會掉** |
    | `TURSO_AUTH_TOKEN` | Turso 給的 token | 資料庫密碼 |
    | `STAFF_PIN` | 4～8 位數字 | 店員登入 `/admin`、`/kitchen` 的預設密碼（後台可再改） |
+   | `OWNER_PHONE` | `0912345678` | 忘記密碼時用來驗證的老闆手機（可不設，直接在後台登記即可） |
    | `PUBLIC_URL` | `https://你的網址` | QRcode 裡要寫的網址（Render 不用設，會自動抓） |
    | `TABLE_COUNT` | `6` | 內用桌數（預設 6 桌），改了重啟即生效 |
    | `TZ_OFFSET_HOURS` | `8` | 報表分天用的時差，台灣是 +8（預設值，不用設） |

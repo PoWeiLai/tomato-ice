@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, onUnmounted, reactive, ref, watch } from 'vue'
 import { api, money, subscribe, type Category, type MenuItem, type Feedback, type Order, type OptionChoice } from '../api'
+import { PRESS, STORE } from '../store'
+import StoreMap from '../components/StoreMap.vue'
+import PressCard from '../components/PressCard.vue'
 
 const props = defineProps<{ tableId?: string; takeout?: boolean }>()
 /** 外帶沒有桌號，用 0 代表（伺服器端的保留桌） */
@@ -366,6 +369,25 @@ onUnmounted(unsubscribe)
             <p v-if="c.items.length === 0" class="state muted">此分類尚未有餐點</p>
           </section>
         </template>
+
+        <!-- 部落格報導：文章清單在 src/store.ts 的 PRESS 改 -->
+        <section v-if="PRESS.length" class="press">
+          <h2 class="press-title">媒體報導</h2>
+          <PressCard v-for="p in PRESS" :key="p.url" v-bind="p" />
+        </section>
+
+        <!-- 店家位置：內用、外帶都看得到，地址在 src/store.ts 改 -->
+        <!-- 臉書粉專：網址在 src/store.ts 的 STORE.facebook 改 -->
+        <a v-if="STORE.facebook" :href="STORE.facebook" target="_blank" rel="noopener" class="card fb press">
+          <span class="fb-icon" aria-hidden="true">f</span>
+          <span class="fb-text">
+            <strong>吃得開心嗎？來粉專按個讚 💙</strong>
+            <span class="muted small">新菜色、公休、優惠都在臉書搶先說，追蹤不漏接</span>
+          </span>
+          <span class="fb-go">去看看 ›</span>
+        </a>
+
+        <StoreMap class="press" />
       </main>
     </template>
 
@@ -650,6 +672,58 @@ onUnmounted(unsubscribe)
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+.press {
+  margin-top: 12px;
+  gap: 8px;
+}
+.press-title {
+  margin: 0;
+  font-size: 15px;
+  color: var(--menu-red);
+}
+/* 臉書卡片：藍色圓形 f 當圖示，整張可點 */
+.fb {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  text-decoration: none;
+  color: inherit;
+  border-color: #1877f2;
+  box-shadow: 0 0 0 2px rgba(24, 119, 242, 0.15), var(--shadow);
+}
+.fb-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #1877f2;
+  color: #fff;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  padding-top: 4px; /* 字母 f 視覺置中 */
+}
+.fb-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.fb-text strong {
+  font-size: 15px;
+  line-height: 1.4;
+}
+.fb-go {
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1877f2;
 }
 .item {
   display: flex;

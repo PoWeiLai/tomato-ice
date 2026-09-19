@@ -361,6 +361,64 @@ app.post('/api/admin/pin', staffOnly, async (req, res) => {
   res.json({ ok: true });
 });
 
+/* ---------- 忘記密碼：用登記的老闆手機重設 ----------
+ * 不發簡訊（要另外申請簡訊服務、店家要付費）。老闆先在後台登記手機，
+ * 忘記密碼時輸入同一支號碼就能設新密碼。號碼只存數字，輸入時有沒有「-」都可以。
+ * 優先順序：後台登記的號碼（存在資料庫）> 環境變數 OWNER_PHONE > 沒有（不開放自助重設）
+ */
+const normalizePhone = (v) => String(v ?? '').replace(/\D/g, '');
+const PHONE_RULE = /^\d{8,15}$/;
+const ENV_PHONE = normalizePhone(process.env.OWNER_PHONE);
+const ownerPhone = async () => {
+  const saved = await getSetting('owner_phone');
+  if (saved !== undefined && saved !== null) return saved; // 後台可以存空字串代表「取消登記」
+  return PHONE_RULE.test(ENV_PHONE) ? ENV_PHONE : '';
+};
+
+// 手機號碼猜得到，所以要擋暴力嘗試：連錯 5 次鎖 15 分鐘（單店系統，全域鎖就夠）
+const RESET_MAX_TRIES = 5;
+const RESET_LOCK_MS = 15 * 60 * 1000;
+let resetFails = 0;
+let resetLockedUntil = 0;
+
+app.get('/api/staff/reset', async (_req, res) => {
+  res.json({ available: Boolean(await ownerPhone()) });
+});
+
+app.post('/api/staff/reset', async (req, res) => {
+  const phone = await ownerPhone();
+  if (!phone) return res.status(404).json({ error: '尚未登記老闆手機，無法自助重設密碼' });
+  if (Date.now() < resetLockedUntil) {
+    const mins = Math.ceil((resetLockedUntil - Date.now()) / 60000);
+    return res.status(429).json({ error: `嘗試次數過多，請 ${mins} 分鐘後再試` });
+  }
+  const pin = String(req.body?.pin ?? '').trim();
+  if (!PIN_RULE.test(pin)) return bad(res, '新密碼必須是 4～8 位數字（手機才打得出來）');
+  if (normalizePhone(req.body?.phone) !== phone) {
+    resetFails += 1;
+    if (resetFails >= RESET_MAX_TRIES) {
+      resetFails = 0;
+      resetLockedUntil = Date.now() + RESET_LOCK_MS;
+      return res.status(429).json({ error: '手機號碼連續錯誤 5 次，15 分鐘內暫停重設' });
+    }
+    return res.status(401).json({ error: `手機號碼不符（還可以試 ${RESET_MAX_TRIES - resetFails} 次）` });
+  }
+  resetFails = 0;
+  await setSetting('staff_pin', pin);
+  res.json({ ok: true });
+});
+
+app.get('/api/admin/owner-phone', staffOnly, async (_req, res) => {
+  res.json({ phone: await ownerPhone() });
+});
+
+app.post('/api/admin/owner-phone', staffOnly, async (req, res) => {
+  const phone = normalizePhone(req.body?.phone);
+  if (phone && !PHONE_RULE.test(phone)) return bad(res, '手機號碼格式不對，請輸入 8～15 位數字，例如 0912345678');
+  await setSetting('owner_phone', phone); // 空字串 = 取消登記
+  res.json({ ok: true, phone });
+});
+
 /* ---------- 後台：菜單 ---------- */
 app.post('/api/admin/categories', staffOnly, async (req, res) => {
   const { name, sort = 0 } = req.body || {};
