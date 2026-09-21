@@ -21,7 +21,10 @@ onMounted(async () => {
       </div>
     </div>
     <div class="meander hero-trim" aria-hidden="true"></div>
-    <p class="lead muted">客人掃桌上的 QRcode 即可點餐，訂單直接進廚房看板。</p>
+    <!-- 兩句各自不拆行，手機上寬度不夠時只會在逗號處換行，不會把「看板」單獨擠到下一行 -->
+    <p class="lead muted">
+      <span>客人掃桌上的 QRcode 即可點餐，</span><span>訂單直接進廚房看板。</span>
+    </p>
 
     <div class="cards">
       <RouterLink to="/takeout" class="card tile takeout">
@@ -105,7 +108,13 @@ onMounted(async () => {
 }
 .lead {
   margin: 16px 0 0;
+  padding: 0 8px;
   text-align: center;
+  line-height: 1.6;
+}
+.lead span {
+  display: inline-block;
+  white-space: nowrap;
 }
 .cards {
   display: grid;
