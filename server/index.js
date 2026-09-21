@@ -797,7 +797,8 @@ app.get('/api/admin/report', staffOnly, async (req, res) => {
                 COUNT(DISTINCT date(closed_at,${LOCAL})) AS openDays, ${monthExpr} AS month
          FROM sessions WHERE closed_at IS NOT NULL AND strftime('%Y-%m', closed_at, ${LOCAL}) = ${monthExpr}`
       )
-      .get(...monthArgs),
+      // monthExpr 在這句裡出現兩次（SELECT 與 WHERE），有帶 date 時就要給兩個參數
+      .get(...monthArgs, ...monthArgs),
     db
       .prepare(
         `SELECT oi.name AS name, SUM(oi.qty) AS qty, SUM(oi.qty * oi.price) AS amount
