@@ -587,6 +587,15 @@ onUnmounted(unsubscribe)
   aspect-ratio: 4 / 3; /* 跟門面照同比例，才不會裁掉招牌 */
   background: url('/images/門面.jpg') center / cover no-repeat;
   position: relative;
+  box-shadow: 0 12px 28px rgba(27, 95, 180, 0.2); /* 招牌照浮在白牆上 */
+  z-index: 1;
+}
+.banner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 40px rgba(16, 36, 61, 0.3);
 }
 .banner-text {
   position: absolute;
@@ -624,6 +633,7 @@ onUnmounted(unsubscribe)
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(6px);
   border-bottom: 1px solid rgba(27, 95, 180, 0.18);
+  box-shadow: 0 4px 14px rgba(27, 95, 180, 0.1); /* 黏在上方的抬頭壓在菜單上 */
   position: sticky;
   top: 0;
   z-index: 20;
@@ -678,9 +688,10 @@ onUnmounted(unsubscribe)
   white-space: nowrap;
 }
 .cats button.on {
-  background: var(--menu-blue);
-  border-color: var(--menu-blue);
+  background: linear-gradient(180deg, #2a72cc, var(--brand-dark));
+  border-color: var(--brand-dark);
   color: #fff;
+  box-shadow: 0 3px 10px rgba(27, 95, 180, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 .list {
   display: flex;
@@ -763,6 +774,10 @@ onUnmounted(unsubscribe)
   gap: 12px;
   align-items: center;
   padding: 12px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.item:not(.soldout):active {
+  transform: scale(0.99);
 }
 .item.soldout {
   opacity: 0.55;
@@ -775,14 +790,15 @@ onUnmounted(unsubscribe)
   flex: none;
   /* 白色相框＋淡藍描邊，翻拍的 DM 照片放在白牆上也顯得亮 */
   border: 3px solid #fff;
-  box-shadow: 0 0 0 1px var(--line), 0 4px 12px rgba(27, 95, 180, 0.12);
+  box-shadow: 0 0 0 1px var(--line), 0 2px 4px rgba(16, 36, 61, 0.1), 0 8px 18px rgba(27, 95, 180, 0.22);
   background: #fff;
 }
 /* 還沒拍照的品項：用品名前兩字做字卡，不留空白 */
 .placeholder {
   display: grid;
   place-items: center;
-  background: linear-gradient(140deg, var(--brand-soft), #cfe0f5);
+  background: linear-gradient(140deg, #ffffff 0%, var(--brand-soft) 40%, #bcd3ef 100%);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
   color: var(--brand-dark);
   font-weight: 700;
   font-size: 22px;
@@ -835,6 +851,8 @@ onUnmounted(unsubscribe)
   padding: 0;
   font-size: 18px;
   line-height: 1;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #ffffff, #eef4fb);
 }
 .stepper span {
   min-width: 28px;
@@ -1035,7 +1053,9 @@ onUnmounted(unsubscribe)
   padding: 14px 18px;
   font-size: 17px;
   z-index: 30;
-  box-shadow: var(--shadow);
+  border-radius: 16px;
+  box-shadow: 0 4px 10px rgba(18, 70, 138, 0.35), 0 20px 48px rgba(18, 70, 138, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 .cartbar span:nth-child(2) {
   flex: 1;
@@ -1070,6 +1090,7 @@ onUnmounted(unsubscribe)
   z-index: 50;
   display: flex;
   flex-direction: column;
+  box-shadow: 0 -8px 32px rgba(16, 36, 61, 0.25);
 }
 .sheet > header {
   display: flex;
@@ -1119,10 +1140,11 @@ onUnmounted(unsubscribe)
   gap: 6px;
 }
 .choice.on {
-  background: var(--brand-soft);
+  background: linear-gradient(180deg, #eef4fc, var(--brand-soft));
   border-color: var(--brand);
   color: var(--brand-dark);
   font-weight: 600;
+  box-shadow: 0 0 0 2px rgba(27, 95, 180, 0.18), inset 0 1px 0 #fff;
 }
 .delta {
   font-size: 13px;

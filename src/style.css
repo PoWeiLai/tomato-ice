@@ -15,7 +15,14 @@
   --warn: #b57314;
   --warn-soft: #fdf2e0;
   --radius: 14px;
-  --shadow: 0 1px 2px rgba(16, 36, 61, 0.06), 0 8px 24px rgba(16, 36, 61, 0.08);
+  /* 立體感：三層陰影（貼地細影＋中距離柔影＋遠距離大氛圍影），加上卡片頂部一道白色亮邊 */
+  --shadow: 0 1px 2px rgba(16, 36, 61, 0.08), 0 6px 16px rgba(27, 95, 180, 0.1),
+    0 16px 40px rgba(27, 95, 180, 0.08);
+  --shadow-lg: 0 2px 4px rgba(16, 36, 61, 0.1), 0 12px 28px rgba(27, 95, 180, 0.16),
+    0 32px 64px rgba(27, 95, 180, 0.14);
+  --shadow-sm: 0 1px 2px rgba(16, 36, 61, 0.08), 0 3px 8px rgba(27, 95, 180, 0.08);
+  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --surface-grad: linear-gradient(180deg, #ffffff 0%, #f7fafe 100%);
   color-scheme: light;
 }
 
@@ -31,7 +38,12 @@ body,
 
 body {
   margin: 0;
-  background: var(--bg);
+  /* 底色加兩團柔光，牆面不再是死白一片 */
+  background:
+    radial-gradient(900px 500px at 10% -10%, rgba(255, 255, 255, 0.9), transparent 60%),
+    radial-gradient(800px 500px at 100% 0%, rgba(27, 95, 180, 0.08), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
   color: var(--ink);
   font-family: 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', system-ui, -apple-system, sans-serif;
   font-size: 16px;
@@ -56,10 +68,18 @@ button {
   background: var(--surface);
   color: var(--ink);
   border: 1px solid var(--line);
-  transition: filter 0.12s ease, background 0.12s ease;
+  /* 按鈕微微浮起，按下去會往下沉 */
+  box-shadow: var(--shadow-sm), var(--edge);
+  transition: filter 0.12s ease, background 0.12s ease, transform 0.08s ease, box-shadow 0.12s ease;
 }
 button:hover:not(:disabled) {
   filter: brightness(0.97);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow), var(--edge);
+}
+button:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 4px rgba(16, 36, 61, 0.15);
 }
 button:disabled {
   opacity: 0.45;
@@ -67,19 +87,25 @@ button:disabled {
 }
 
 .btn-primary {
-  background: var(--brand);
-  border-color: var(--brand);
+  background: linear-gradient(180deg, #2a72cc 0%, var(--brand) 55%, var(--brand-dark) 100%);
+  border-color: var(--brand-dark);
   color: #fff;
   font-weight: 600;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 6px rgba(27, 95, 180, 0.35), 0 8px 20px rgba(27, 95, 180, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 .btn-primary:hover:not(:disabled) {
-  background: var(--brand-dark);
+  filter: brightness(1.05);
 }
 .btn-ok {
-  background: var(--ok);
-  border-color: var(--ok);
+  background: linear-gradient(180deg, #2a9160 0%, var(--ok) 55%, #17603c 100%);
+  border-color: #17603c;
   color: #fff;
   font-weight: 600;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 6px rgba(31, 122, 77, 0.35), 0 8px 20px rgba(31, 122, 77, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 .btn-danger {
   color: #b3261e;
@@ -97,6 +123,7 @@ textarea {
   background: var(--surface);
   color: var(--ink);
   width: 100%;
+  box-shadow: inset 0 1px 3px rgba(16, 36, 61, 0.08); /* 輸入框微凹 */
 }
 input:focus,
 select:focus,
@@ -106,10 +133,22 @@ textarea:focus {
 }
 
 .card {
-  background: var(--surface);
-  border: 1px solid var(--line);
+  background: var(--surface-grad);
+  border: 1px solid rgba(213, 227, 242, 0.9);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow), var(--edge);
+}
+/* 可點的卡片（RouterLink 做的）滑過去會浮起、按下去回到原位 */
+a.card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+a.card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg), var(--edge);
+}
+a.card:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm), var(--edge);
 }
 
 .muted {
@@ -129,7 +168,7 @@ textarea:focus {
   padding: 12px 20px;
   border-radius: 999px;
   z-index: 100;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-lg);
   max-width: min(90vw, 420px);
   text-align: center;
 }

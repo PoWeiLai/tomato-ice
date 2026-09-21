@@ -21,10 +21,8 @@ onMounted(async () => {
       </div>
     </div>
     <div class="meander hero-trim" aria-hidden="true"></div>
-    <!-- 兩句各自不拆行，手機上寬度不夠時只會在逗號處換行，不會把「看板」單獨擠到下一行 -->
-    <p class="lead muted">
-      <span>客人掃桌上的 QRcode 即可點餐，</span><span>訂單直接進廚房看板。</span>
-    </p>
+    <!-- 縮短成一行放得下手機寬度的句子，永遠不換行、置中對齊招牌 -->
+    <p class="lead muted">掃桌上 QRcode 點餐，訂單直送廚房看板</p>
 
     <div class="cards">
       <RouterLink to="/takeout" class="card tile takeout">
@@ -76,10 +74,18 @@ onMounted(async () => {
   aspect-ratio: 4 / 3; /* 跟門面照同比例，才不會裁掉招牌 */
   border-radius: var(--radius) var(--radius) 0 0;
   overflow: hidden;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-lg);
   background: url('/images/門面.jpg') center / cover no-repeat;
   border: 3px solid #fff;
   border-bottom: 0;
+}
+/* 照片四周壓一圈內陰影，像鑲在相框裡 */
+.hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 40px rgba(16, 36, 61, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 .hero-text {
   position: absolute;
@@ -103,18 +109,18 @@ onMounted(async () => {
   border: 3px solid #fff;
   border-top: 0;
   border-radius: 0 0 var(--radius) var(--radius);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-lg);
   height: 18px;
+  position: relative;
+  z-index: 1;
 }
 .lead {
   margin: 16px 0 0;
   padding: 0 8px;
   text-align: center;
   line-height: 1.6;
-}
-.lead span {
-  display: inline-block;
   white-space: nowrap;
+  font-size: clamp(13px, 4vw, 16px); /* 很窄的手機再縮一點字，保證一行 */
 }
 .cards {
   display: grid;
@@ -123,17 +129,27 @@ onMounted(async () => {
   margin: 28px auto 40px;
 }
 .tile {
-  padding: 20px;
+  position: relative;
+  padding: 22px 20px 20px;
   text-decoration: none;
   color: inherit;
-  border-top: 4px solid var(--brand);
+  border-top: 0;
+  overflow: hidden;
+}
+/* 上緣一道有光澤的藍色漸層條 */
+.tile::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 5px;
+  background: linear-gradient(90deg, #3a82dc, var(--brand-dark));
+  box-shadow: 0 1px 3px rgba(27, 95, 180, 0.4);
 }
 .tile p {
   margin: 6px 0 0;
 }
 .tile.takeout {
-  border-color: var(--brand);
-  box-shadow: 0 0 0 2px var(--brand-soft), var(--shadow);
+  box-shadow: 0 0 0 3px var(--brand-soft), var(--shadow-lg), var(--edge);
 }
 .tile.takeout h2 {
   color: var(--brand);
@@ -162,6 +178,9 @@ onMounted(async () => {
   font-weight: 700;
   text-decoration: none;
   color: var(--brand);
+  /* 桌號做成像一顆按鍵 */
+  background: linear-gradient(180deg, #ffffff, #eaf2fc);
+  box-shadow: var(--shadow-sm), var(--edge), inset 0 -3px 0 rgba(27, 95, 180, 0.15);
 }
 @media (max-width: 600px) {
   .home {
