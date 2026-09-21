@@ -105,6 +105,18 @@ export interface Report {
   byHour: { hour: number; count: number; amount: number }[]
   days: { date: string; count: number; revenue: number; takeoutCount: number }[]
   topItems: { name: string; qty: number; amount: number }[]
+  /** 這一天所屬月份的累計，公司回頭看整月狀況用 */
+  month: {
+    month: string | null
+    count: number
+    takeoutCount: number
+    revenue: number
+    discountTotal: number
+    openDays: number
+    topItems: { name: string; qty: number; amount: number }[]
+  }
+  /** 這一天每一張結清的帳單（含品項），逐筆查用 */
+  bills: (Bill & { payment: Payment; paid_total: number })[]
 }
 
 export interface Feedback {

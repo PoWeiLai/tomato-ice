@@ -253,6 +253,10 @@ const dayLabel = (iso: string) => {
   const [, m, d] = iso.split('-')
   return `${Number(m)}/${Number(d)}`
 }
+const monthLabel = (ym: string | null) => (ym ? `${Number(ym.split('-')[1])} 月` : '本月')
+const monthTopMax = computed(() => Math.max(1, ...(report.value?.month?.topItems || []).map((i) => i.qty)))
+/** 結帳時間只顯示時:分 */
+const clock = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false }) : '')
 
 /* ---------- 顧客回饋 ---------- */
 const feedback = ref<{ count: number; avg: number; pending: number; list: Feedback[] } | null>(null)
@@ -728,6 +732,60 @@ onUnmounted(unsubscribe)
           <button class="btn-primary" :disabled="backupBusy" @click="saveBackup">
             {{ backupBusy ? '備份中…' : '下載備份' }}
           </button>
+        </section>
+
+        <!-- 當日每一張帳單：老闆回頭查某一天到底賣了什麼 -->
+        <section class="card pad">
+          <h2>{{ isToday ? '今日' : '當日' }}帳單明細</h2>
+          <p v-if="!report?.bills?.length" class="muted small">這天沒有結清的帳單</p>
+          <ul v-else class="history">
+            <li v-for="b in report.bills" :key="b.id">
+              <div class="history-head">
+                <strong>{{ billTitle(b) }}</strong>
+                <span class="muted small tabular">{{ clock(b.closed_at) }}</span>
+                <span class="pay-tag" :style="{ background: PAYMENT_COLOR[b.payment] }">{{ PAYMENT_LABEL[b.payment] }}</span>
+                <strong class="tabular history-total">{{ money(b.paid_total) }}</strong>
+              </div>
+              <p class="muted small history-items">
+                {{ b.orders.flatMap((o) => o.items).map(describeLine).join('、') }}
+                <template v-if="b.discount">（{{ b.discount_note || '折扣' }} −{{ money(b.discount) }}）</template>
+              </p>
+            </li>
+          </ul>
+        </section>
+
+        <!-- 整月累計：公司回頭看一個月的狀況 -->
+        <section v-if="report?.month" class="card pad month">
+          <h2>{{ monthLabel(report.month.month) }}累計</h2>
+          <div class="stats month-stats">
+            <div class="stat">
+              <span class="muted">營業額</span>
+              <strong class="tabular">{{ money(report.month.revenue) }}</strong>
+              <span class="muted small">營業 {{ report.month.openDays }} 天，平均每天 {{ money(Math.round(report.month.revenue / (report.month.openDays || 1))) }}</span>
+            </div>
+            <div class="stat">
+              <span class="muted">結帳筆數</span>
+              <strong class="tabular">{{ report.month.count }}</strong>
+              <span class="muted small">其中外帶 {{ report.month.takeoutCount }} 筆，平均每筆 {{ money(Math.round(report.month.revenue / (report.month.count || 1))) }}</span>
+            </div>
+            <div class="stat">
+              <span class="muted">折扣／免單</span>
+              <strong class="tabular">−{{ money(report.month.discountTotal) }}</strong>
+            </div>
+          </div>
+          <table v-if="report.month.topItems.length" class="items top">
+            <thead>
+              <tr><th>本月熱銷</th><th class="bar-col"></th><th class="num">份數</th><th class="num">金額</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="i in report.month.topItems" :key="i.name">
+                <td>{{ i.name }}</td>
+                <td class="bar-col"><div class="hbar" :style="{ width: `${pct(i.qty, monthTopMax)}%` }" :title="`${i.name} ${i.qty} 份`"></div></td>
+                <td class="num tabular">{{ i.qty }}</td>
+                <td class="num tabular">{{ money(i.amount) }}</td>
+              </tr>
+            </tbody>
+          </table>
         </section>
 
         <section class="card pad">
@@ -1243,6 +1301,45 @@ code {
   min-width: 4px;
   background: var(--brand);
   border-radius: 0 4px 4px 0;
+}
+/* 當日帳單明細：一張帳單一列，抬頭是桌號／時間／付款方式／金額，下面一行品項 */
+.history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.history li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.history li:last-child {
+  border-bottom: 0;
+}
+.history-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.history-total {
+  margin-left: auto;
+}
+.history-items {
+  margin: 4px 0 0;
+}
+.pay-tag {
+  font-size: 12px;
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.month-stats {
+  margin: 4px 0 16px;
+}
+.month-stats .stat strong {
+  font-size: 24px;
 }
 .days tbody tr {
   cursor: pointer;

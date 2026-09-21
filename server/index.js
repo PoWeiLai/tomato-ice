@@ -756,7 +756,10 @@ app.get('/api/admin/report', staffOnly, async (req, res) => {
   const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date) ? req.query.date : null;
   const dateExpr = date ? '?' : `date('now',${LOCAL})`;
   const dateArgs = date ? [date] : [];
-  const [closed, top, byHour, days] = await Promise.all([
+  // 這一天所屬的月份（YYYY-MM），拿來算整月累計；不帶 date 就是本月
+  const monthExpr = date ? '?' : `strftime('%Y-%m','now',${LOCAL})`;
+  const monthArgs = date ? [date.slice(0, 7)] : [];
+  const [closed, top, byHour, days, monthRows, monthTop] = await Promise.all([
     db
       .prepare(`SELECT * FROM sessions WHERE closed_at IS NOT NULL AND date(closed_at,${LOCAL}) = ${dateExpr}`)
       .all(...dateArgs),
@@ -783,15 +786,45 @@ app.get('/api/admin/report', staffOnly, async (req, res) => {
         `SELECT date(closed_at,${LOCAL}) AS date, COUNT(*) AS count, SUM(paid_total) AS revenue,
                 SUM(kind = 'takeout') AS takeoutCount
          FROM sessions WHERE closed_at IS NOT NULL
-         GROUP BY date ORDER BY date DESC LIMIT 30`
+         GROUP BY date ORDER BY date DESC LIMIT 31`
       )
       .all(),
+    // 整月累計：公司要回頭看一個月的狀況
+    db
+      .prepare(
+        `SELECT COUNT(*) AS count, COALESCE(SUM(paid_total), 0) AS revenue,
+                COALESCE(SUM(discount), 0) AS discountTotal, SUM(kind = 'takeout') AS takeoutCount,
+                COUNT(DISTINCT date(closed_at,${LOCAL})) AS openDays, ${monthExpr} AS month
+         FROM sessions WHERE closed_at IS NOT NULL AND strftime('%Y-%m', closed_at, ${LOCAL}) = ${monthExpr}`
+      )
+      .get(...monthArgs),
+    db
+      .prepare(
+        `SELECT oi.name AS name, SUM(oi.qty) AS qty, SUM(oi.qty * oi.price) AS amount
+         FROM order_items oi
+         JOIN orders o ON o.id = oi.order_id
+         WHERE strftime('%Y-%m', o.created_at, ${LOCAL}) = ${monthExpr} AND o.status <> 'cancelled'
+         GROUP BY oi.name ORDER BY qty DESC LIMIT 10`
+      )
+      .all(...monthArgs),
   ]);
+  // 這一天每一張結清的帳單連同品項，老闆可以逐筆查
+  const bills = await Promise.all(closed.map(billOf));
   const sum = (rows) => rows.reduce((s, c) => s + (c.paid_total || 0), 0);
   const takeout = closed.filter((c) => c.kind === 'takeout');
   const dine = closed.filter((c) => c.kind !== 'takeout');
   res.json({
     date: date || days[0]?.date || null,
+    month: {
+      month: monthRows?.month || null,
+      count: monthRows?.count || 0,
+      takeoutCount: monthRows?.takeoutCount || 0,
+      revenue: monthRows?.revenue || 0,
+      discountTotal: monthRows?.discountTotal || 0,
+      openDays: monthRows?.openDays || 0,
+      topItems: monthTop,
+    },
+    bills,
     closedCount: closed.length,
     takeoutCount: takeout.length,
     revenue: sum(closed),
