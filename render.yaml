@@ -8,8 +8,10 @@ services:
     buildCommand: npm ci && npm run build
     startCommand: npm start
     envVars:
+      # 店員密碼：建 Blueprint 時 Render 會問，填 4～8 位數字（手機登入用數字鍵盤）；之後可在後台「今日報表」頁改。
+      # 這個 repo 是公開的，所以密碼不寫在檔案裡。
       - key: STAFF_PIN
-        value: "882266"   # 只能用數字（手機登入用數字鍵盤）；也可以之後在後台「今日報表」頁改
+        sync: false
       # OWNER_PHONE 可不設：老闆手機建議直接在後台「今日報表」→「老闆手機」登記，
       # 忘記密碼時輸入這支號碼就能自助重設。
       # 資料存在 Turso（雲端 SQLite），主機沒有硬碟也不會掉訂單和照片。
