@@ -216,7 +216,7 @@ public/images/          菜色照片
    若是 `"db":"file"` 並附一段 `warning`，代表 Turso 兩個值沒填或填錯，照 warning 的提示到主機
    環境變數頁修正（程式不會因此停掉，只是資料暫存主機本機、重啟會掉）。
 
-目前線上：<https://restaurant-order-wchh.onrender.com>
+目前線上：（尚未部署，建好新的 Render 服務後把網址填在這裡）
 
 ### 第一次啟動會自動做的事
 
