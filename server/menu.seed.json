@@ -1,543 +1,286 @@
 {
-  "_說明": "嚐香聚牛肉麵 菜單資料。改完執行 npm run seed:menu 匯入（會覆蓋現有菜單）。price 為整數（新台幣）。",
-  "店名": "嚐香聚牛肉麵",
+  "_說明": "蔗家店 菜單資料（依店家 DM 抄錄）。改完執行 npm run seed:menu 匯入（會覆蓋現有菜單）。price 為整數（新台幣）。",
+  "店名": "蔗家店",
   "optionGroups": [
     {
-      "key": "湯乾",
-      "name": "湯的還是乾的",
+      "key": "冰沙果汁",
+      "name": "冰沙或果汁",
       "mode": "single",
       "required": true,
       "choices": [
-        {
-          "name": "湯",
-          "price_delta": 0
-        },
-        {
-          "name": "乾",
-          "price_delta": 0
-        }
+        { "name": "冰沙", "price_delta": 0 },
+        { "name": "果汁", "price_delta": 0 }
       ]
     },
     {
-      "key": "換麵",
-      "name": "換麵（不加價或小額加價）",
-      "mode": "single",
-      "required": false,
-      "choices": [
-        {
-          "name": "不換（原麵）",
-          "price_delta": 0
-        },
-        {
-          "name": "換細麵",
-          "price_delta": 0
-        },
-        {
-          "name": "換冬粉",
-          "price_delta": 0
-        },
-        {
-          "name": "換烏龍麵",
-          "price_delta": 15
-        },
-        {
-          "name": "換麵疙瘩",
-          "price_delta": 15
-        }
-      ]
-    },
-    {
-      "key": "加麵",
-      "name": "加麵",
-      "mode": "single",
-      "required": false,
-      "choices": [
-        {
-          "name": "不加",
-          "price_delta": 0
-        },
-        {
-          "name": "加麵",
-          "price_delta": 10
-        },
-        {
-          "name": "加細麵",
-          "price_delta": 10
-        },
-        {
-          "name": "加冬粉",
-          "price_delta": 10
-        },
-        {
-          "name": "加烏龍麵",
-          "price_delta": 30
-        },
-        {
-          "name": "加麵疙瘩",
-          "price_delta": 30
-        }
-      ]
-    },
-    {
-      "key": "滷肉飯份量",
-      "name": "份量",
+      "key": "雪花口味",
+      "name": "雪花冰口味",
       "mode": "single",
       "required": true,
       "choices": [
-        {
-          "name": "小",
-          "price_delta": 0
-        },
-        {
-          "name": "大",
-          "price_delta": 10
-        }
+        { "name": "牛奶", "price_delta": 0 },
+        { "name": "草莓", "price_delta": 0 },
+        { "name": "芒果", "price_delta": 0 },
+        { "name": "抹茶", "price_delta": 0 },
+        { "name": "伯爵奶茶", "price_delta": 0 },
+        { "name": "巧克力", "price_delta": 0 },
+        { "name": "花生", "price_delta": 0 },
+        { "name": "檸檬", "price_delta": 0 }
       ]
     },
     {
-      "key": "加牛肉",
-      "name": "加牛肉",
+      "key": "雪花雙口味",
+      "name": "雪花冰口味（請選兩種）",
+      "mode": "multi",
+      "required": true,
+      "choices": [
+        { "name": "牛奶", "price_delta": 0 },
+        { "name": "草莓", "price_delta": 0 },
+        { "name": "芒果", "price_delta": 0 },
+        { "name": "抹茶", "price_delta": 0 },
+        { "name": "伯爵奶茶", "price_delta": 0 },
+        { "name": "巧克力", "price_delta": 0 },
+        { "name": "花生", "price_delta": 0 },
+        { "name": "檸檬", "price_delta": 0 }
+      ]
+    },
+    {
+      "key": "附加一料",
+      "name": "附加一料（免費）",
+      "mode": "single",
+      "required": true,
+      "choices": [
+        { "name": "紅豆", "price_delta": 0 },
+        { "name": "綠豆", "price_delta": 0 },
+        { "name": "芋圓", "price_delta": 0 },
+        { "name": "粉粿", "price_delta": 0 },
+        { "name": "仙草", "price_delta": 0 },
+        { "name": "寒天", "price_delta": 0 },
+        { "name": "波波球", "price_delta": 0 },
+        { "name": "花生", "price_delta": 0 }
+      ]
+    },
+    {
+      "key": "附加二料",
+      "name": "附加二料（免費，請選兩樣）",
+      "mode": "multi",
+      "required": true,
+      "choices": [
+        { "name": "紅豆", "price_delta": 0 },
+        { "name": "綠豆", "price_delta": 0 },
+        { "name": "芋圓", "price_delta": 0 },
+        { "name": "粉粿", "price_delta": 0 },
+        { "name": "仙草", "price_delta": 0 },
+        { "name": "寒天", "price_delta": 0 },
+        { "name": "波波球", "price_delta": 0 },
+        { "name": "花生", "price_delta": 0 }
+      ]
+    },
+    {
+      "key": "刨冰配料",
+      "name": "配料（依三寶／五寶／八寶選幾樣）",
+      "mode": "multi",
+      "required": false,
+      "choices": [
+        { "name": "紅豆", "price_delta": 0 },
+        { "name": "綠豆", "price_delta": 0 },
+        { "name": "大豆", "price_delta": 0 },
+        { "name": "芋圓", "price_delta": 0 },
+        { "name": "地瓜圓", "price_delta": 0 },
+        { "name": "粉粿", "price_delta": 0 },
+        { "name": "仙草", "price_delta": 0 },
+        { "name": "愛玉", "price_delta": 0 },
+        { "name": "寒天", "price_delta": 0 },
+        { "name": "花生", "price_delta": 0 },
+        { "name": "湯圓", "price_delta": 0 },
+        { "name": "芋頭", "price_delta": 0 }
+      ]
+    },
+    {
+      "key": "加鮮水果",
+      "name": "加鮮水果",
       "mode": "single",
       "required": false,
       "choices": [
-        {
-          "name": "不加",
-          "price_delta": 0
-        },
-        {
-          "name": "加牛肉",
-          "price_delta": 80
-        }
+        { "name": "不加", "price_delta": 0 },
+        { "name": "加鮮水果", "price_delta": 20 }
+      ]
+    },
+    {
+      "key": "冷熱",
+      "name": "冷／熱",
+      "mode": "single",
+      "required": true,
+      "choices": [
+        { "name": "冰的", "price_delta": 0 },
+        { "name": "熱的", "price_delta": 0 }
+      ]
+    },
+    {
+      "key": "甜度",
+      "name": "甜度",
+      "mode": "single",
+      "required": false,
+      "choices": [
+        { "name": "正常", "price_delta": 0 },
+        { "name": "少糖", "price_delta": 0 },
+        { "name": "半糖", "price_delta": 0 },
+        { "name": "微糖", "price_delta": 0 }
+      ]
+    },
+    {
+      "key": "冰塊",
+      "name": "冰塊",
+      "mode": "single",
+      "required": false,
+      "choices": [
+        { "name": "正常", "price_delta": 0 },
+        { "name": "少冰", "price_delta": 0 },
+        { "name": "去冰", "price_delta": 0 }
       ]
     }
   ],
   "categories": [
     {
-      "name": "牛肉類",
+      "name": "招牌麵食",
       "items": [
         {
-          "name": "牛三寶麵",
-          "price": 190,
-          "options": [
-            "湯乾",
-            "換麵",
-            "加麵"
-          ],
-          "image": "/images/三寶麵.jpg"
-        },
-        {
-          "name": "牛肉麵疙瘩",
-          "price": 155,
-          "options": [
-            "湯乾",
-            "加麵"
-          ]
-        },
-        {
-          "name": "牛肉烏龍麵",
+          "name": "番茄牛筋肉麵",
           "price": 150,
-          "options": [
-            "湯乾",
-            "加麵"
-          ]
-        },
+          "description": "整顆鮮番茄量，招牌推薦",
+          "image": "/images/番茄牛筋肉麵.jpg",
+          "options": []
+        }
+      ]
+    },
+    {
+      "name": "天然冰粉",
+      "items": [
+        { "name": "三果冰粉", "price": 55, "description": "三珍果", "options": [] },
         {
-          "name": "牛筋麵",
-          "price": 160,
-          "options": [
-            "湯乾",
-            "換麵",
-            "加麵"
-          ],
-          "image": "/images/牛肉麵.jpg"
+          "name": "水果冰粉",
+          "price": 75,
+          "description": "二水果、三珍果，人氣推薦",
+          "image": "/images/水果冰粉.jpg",
+          "options": []
         },
+        { "name": "豐盛冰粉", "price": 95, "description": "三水果、五珍果", "options": [] }
+      ]
+    },
+    {
+      "name": "鮮果汁・冰沙",
+      "items": [
+        { "name": "木瓜牛奶", "price": 70, "description": "L 杯，人氣推薦", "image": "/images/木瓜牛奶.jpg", "options": ["甜度"] },
+        { "name": "芒果牛奶", "price": 70, "description": "L 杯", "options": ["甜度"] },
+        { "name": "西瓜牛奶", "price": 70, "description": "L 杯", "options": ["甜度"] },
+        { "name": "芒果冰沙／果汁", "price": 60, "description": "L 杯", "options": ["冰沙果汁", "甜度"] },
+        { "name": "西瓜冰沙／果汁", "price": 60, "description": "L 杯", "options": ["冰沙果汁", "甜度"] },
+        { "name": "鳳梨冰沙／果汁", "price": 60, "description": "L 杯", "options": ["冰沙果汁", "甜度"] },
+        { "name": "百香果冰沙／果汁", "price": 60, "description": "L 杯", "options": ["冰沙果汁", "甜度"] },
+        { "name": "檸檬汁／冰沙", "price": 50, "description": "L 杯", "options": ["冰沙果汁", "甜度"] },
+        { "name": "綠豆冰沙", "price": 50, "description": "L 杯", "options": ["甜度"] },
+        { "name": "紅豆冰沙", "price": 50, "description": "L 杯", "options": ["甜度"] },
+        { "name": "綠豆牛奶", "price": 65, "description": "L 杯", "options": ["甜度"] },
+        { "name": "紅豆牛奶", "price": 65, "description": "L 杯", "options": ["甜度"] }
+      ]
+    },
+    {
+      "name": "雪花冰",
+      "items": [
         {
-          "name": "牛肚麵",
-          "price": 160,
-          "options": [
-            "湯乾",
-            "換麵",
-            "加麵"
-          ],
-          "image": "/images/牛肉麵.jpg"
-        },
-        {
-          "name": "半筋半肉麵",
-          "price": 160,
-          "options": [
-            "湯乾",
-            "換麵",
-            "加麵"
-          ],
-          "image": "/images/牛肉麵.jpg"
-        },
-        {
-          "name": "餛飩牛肉麵",
-          "price": 170,
-          "options": [
-            "湯乾",
-            "換麵",
-            "加麵"
-          ],
-          "image": "/images/餛飩牛肉麵.jpg"
-        },
-        {
-          "name": "牛肉麵",
-          "price": 140,
-          "options": [
-            "湯乾",
-            "換麵",
-            "加麵"
-          ],
-          "image": "/images/牛肉麵.jpg"
-        },
-        {
-          "name": "牛湯麵",
+          "name": "純雪花冰",
           "price": 70,
-          "options": [
-            "加麵"
-          ]
+          "description": "附加一料",
+          "options": ["雪花口味", "附加一料"]
         },
         {
-          "name": "牛肉冬粉",
-          "price": 140,
-          "options": [
-            "加麵"
-          ]
+          "name": "双味雪花冰",
+          "price": 90,
+          "description": "兩種口味、附加二料，人氣推薦",
+          "image": "/images/双味雪花冰.jpg",
+          "options": ["雪花雙口味", "附加二料"]
         }
       ]
     },
     {
-      "name": "非牛肉類",
+      "name": "鮮奶蓋雪花",
       "items": [
         {
-          "name": "餛飩麵",
-          "price": 80,
-          "options": [
-            "湯乾",
-            "換麵",
-            "加麵"
-          ]
+          "name": "莓莓遇見",
+          "price": 75,
+          "description": "鮮奶、雪花冰、草莓、波波球",
+          "image": "/images/莓莓遇見.jpg",
+          "options": []
         },
         {
-          "name": "榨菜肉絲麵",
-          "price": 80,
-          "options": [
-            "湯乾",
-            "換麵",
-            "加麵"
-          ],
-          "image": "/images/榨菜肉絲麵.jpg"
+          "name": "芒草花開",
+          "price": 75,
+          "description": "鮮奶、雪花冰、芒果、波波球",
+          "image": "/images/芒草花開.jpg",
+          "options": []
         },
         {
-          "name": "陽春麵（細）",
+          "name": "抹然回首",
+          "price": 65,
+          "description": "鮮奶、雪花冰、紅豆、寒天",
+          "image": "/images/抹然回首.jpg",
+          "options": []
+        }
+      ]
+    },
+    {
+      "name": "黑糖刨冰",
+      "items": [
+        { "name": "三寶刨冰", "price": 50, "description": "選 3 樣配料", "options": ["刨冰配料", "加鮮水果"] },
+        {
+          "name": "五寶刨冰",
           "price": 70,
-          "options": [
-            "湯乾",
-            "換麵",
-            "加麵"
-          ]
+          "description": "選 5 樣配料，人氣推薦",
+          "image": "/images/五寶刨冰.jpg",
+          "options": ["刨冰配料", "加鮮水果"]
         },
-        {
-          "name": "酸辣麵",
-          "price": 80,
-          "options": [
-            "加麵"
-          ],
-          "image": "/images/酸辣麵.jpg"
-        },
-        {
-          "name": "冬瓜排骨麵",
-          "price": 110,
-          "options": [
-            "加麵"
-          ]
-        },
-        {
-          "name": "冬瓜排骨餛飩麵",
-          "price": 130,
-          "options": [
-            "加麵"
-          ]
-        }
+        { "name": "八寶刨冰", "price": 90, "description": "選 8 樣配料", "options": ["刨冰配料", "加鮮水果"] },
+        { "name": "黑糖清冰", "price": 35, "options": ["加鮮水果"] }
       ]
     },
     {
-      "name": "乾麵類",
+      "name": "甜點・甜湯",
       "items": [
+        { "name": "綠豆湯", "price": 40, "options": ["冷熱"] },
+        { "name": "紅豆湯", "price": 50, "description": "附加一料", "options": ["冷熱", "附加一料"] },
         {
-          "name": "雙醬麵",
-          "price": 85,
-          "options": [
-            "加麵"
-          ]
-        },
-        {
-          "name": "紅油乾麵",
-          "price": 75,
-          "options": [
-            "加麵"
-          ]
-        },
-        {
-          "name": "麻醬麵",
-          "price": 75,
-          "options": [
-            "加麵"
-          ],
-          "image": "/images/麻醬麵.jpg"
-        },
-        {
-          "name": "榨醬麵",
-          "price": 75,
-          "options": [
-            "加麵"
-          ],
-          "image": "/images/炸醬麵.jpg"
-        },
-        {
-          "name": "油潑辣仔細麵",
-          "price": 80,
-          "options": [
-            "加麵"
-          ],
-          "image": "/images/油潑辣籽細面.jpg"
-        }
-      ]
-    },
-    {
-      "name": "飯類",
-      "items": [
-        {
-          "name": "牛腩燴飯",
-          "price": 110,
-          "options": []
-        },
-        {
-          "name": "滷肉飯",
-          "price": 35,
-          "description": "小 35 元／大 45 元",
-          "options": [
-            "滷肉飯份量"
-          ]
-        },
-        {
-          "name": "酸辣湯飯",
-          "price": 80,
-          "options": []
-        }
-      ]
-    },
-    {
-      "name": "餃類",
-      "items": [
-        {
-          "name": "紅油抄手",
-          "price": 65,
-          "options": []
-        },
-        {
-          "name": "麻醬抄手",
-          "price": 65,
-          "options": []
-        },
-        {
-          "name": "手工水餃",
-          "price": 80,
-          "description": "10 顆／份",
-          "options": []
-        },
-        {
-          "name": "牛湯水餃",
-          "price": 85,
-          "options": []
-        },
-        {
-          "name": "酸辣湯餃",
-          "price": 85,
-          "options": []
-        }
-      ]
-    },
-    {
-      "name": "湯類",
-      "items": [
-        {
-          "name": "牛肚湯",
-          "price": 130,
-          "options": []
-        },
-        {
-          "name": "牛筋湯",
-          "price": 110,
-          "options": []
-        },
-        {
-          "name": "牛三寶湯",
-          "price": 180,
-          "options": []
-        },
-        {
-          "name": "餛飩湯",
-          "price": 45,
-          "options": [],
-          "image": "/images/餛飩湯.jpg"
-        },
-        {
-          "name": "牛肉湯",
-          "price": 110,
-          "options": []
-        },
-        {
-          "name": "牛清湯",
-          "price": 40,
-          "options": [
-            "加牛肉"
-          ]
-        },
-        {
-          "name": "蛋花湯",
-          "price": 30,
-          "options": []
-        },
-        {
-          "name": "海菜蛋花湯",
-          "price": 40,
-          "options": []
-        },
-        {
-          "name": "榨菜肉絲湯",
-          "price": 45,
-          "options": []
-        },
-        {
-          "name": "酸辣湯",
-          "price": 45,
-          "options": []
-        },
-        {
-          "name": "貢丸蛋花湯",
+          "name": "鮮奶嫩仙草凍",
           "price": 50,
-          "options": []
+          "description": "附加一料，人氣推薦",
+          "image": "/images/鮮奶嫩仙草凍.jpg",
+          "options": ["附加一料"]
         },
-        {
-          "name": "冬瓜排骨湯",
-          "price": 100,
-          "options": []
-        },
-        {
-          "name": "排骨餛飩湯",
-          "price": 120,
-          "options": []
-        },
-        {
-          "name": "牛肉餛飩湯",
-          "price": 145,
-          "options": []
-        }
+        { "name": "燒仙草", "price": 50, "description": "附加一料，人氣推薦", "options": ["附加一料"] },
+        { "name": "彩虹粉粿", "price": 70, "image": "/images/彩虹粉粿.jpg", "options": [] }
       ]
     },
     {
-      "name": "小菜",
+      "name": "經典茶飲",
       "items": [
         {
-          "name": "小魚豆乾",
-          "price": 50,
-          "image": "/images/小魚豆乾.jpg",
-          "options": []
-        },
-        {
-          "name": "皮蛋豆腐",
-          "price": 45,
-          "options": []
-        },
-        {
-          "name": "泡菜蘿蔔",
-          "price": 35,
-          "options": []
-        },
-        {
-          "name": "高麗菜泡菜",
-          "price": 50,
-          "options": [],
-          "image": "/images/泡菜.jpg"
-        },
-        {
-          "name": "辣筍",
+          "name": "煙風東方美人茶",
           "price": 40,
-          "options": []
+          "description": "蜂蜜，L 杯，人氣推薦",
+          "image": "/images/煙風東方美人茶.jpg",
+          "options": ["冷熱", "甜度", "冰塊"]
         },
         {
-          "name": "大頭菜",
-          "price": 40,
-          "options": []
-        },
-        {
-          "name": "乾絲",
-          "price": 40,
-          "options": []
-        },
-        {
-          "name": "海帶芽",
-          "price": 40,
-          "options": []
-        },
-        {
-          "name": "小黃瓜",
-          "price": 50,
-          "image": "/images/小黃瓜.jpg",
-          "options": []
-        }
-      ]
-    },
-    {
-      "name": "滷味",
-      "items": [
-        {
-          "name": "牛腱肉",
-          "price": 90,
-          "options": []
-        },
-        {
-          "name": "牛筋",
-          "price": 100,
-          "options": []
-        },
-        {
-          "name": "牛肚",
-          "price": 90,
-          "options": []
-        },
-        {
-          "name": "大腸",
+          "name": "波霸奶美人茶",
           "price": 60,
-          "options": []
+          "description": "L 杯",
+          "image": "/images/波霸奶美人茶.jpg",
+          "options": ["甜度", "冰塊"]
         },
-        {
-          "name": "豬耳朵",
-          "price": 50,
-          "options": []
-        },
-        {
-          "name": "花生",
-          "price": 50,
-          "options": []
-        },
-        {
-          "name": "滷蛋",
-          "price": 15,
-          "options": []
-        },
-        {
-          "name": "海帶",
-          "price": 15,
-          "options": []
-        },
-        {
-          "name": "小豆乾",
-          "price": 15,
-          "options": []
-        }
+        { "name": "蕎麥茶", "price": 40, "description": "L 杯", "options": ["冷熱", "甜度", "冰塊"] },
+        { "name": "仙草甘茶", "price": 30, "description": "L 杯", "options": ["冷熱", "甜度", "冰塊"] },
+        { "name": "仙草撞冬瓜", "price": 40, "description": "L 杯", "options": ["甜度", "冰塊"] },
+        { "name": "仙草撞冬瓜鮮乳", "price": 50, "description": "L 杯", "options": ["甜度", "冰塊"] },
+        { "name": "桂圓紅棗飲", "price": 50, "description": "L 杯", "options": ["冷熱", "甜度", "冰塊"] }
       ]
     }
   ]

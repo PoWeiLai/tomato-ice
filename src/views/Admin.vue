@@ -213,10 +213,10 @@ function viewDate(date: string) {
 
 const KIND_LABEL: Record<string, string> = { dine: '內用', takeout: '外帶' }
 // 圖表配色：固定對應到類別，不會因為某天少一種付款方式就跑掉（已用 dataviz 驗證色盲可分辨）
-const KIND_COLOR: Record<string, string> = { dine: '#b8431f', takeout: '#1f6f9e' }
+const KIND_COLOR: Record<string, string> = { dine: '#1b5fb4', takeout: '#3b9dd6' }
 const PAYMENT_COLOR: Record<string, string> = {
-  cash: '#b8431f',
-  card: '#1f6f9e',
+  cash: '#1b5fb4',
+  card: '#3b9dd6',
   linepay: '#b0851a',
   applepay: '#6b4fb3',
   mobile: '#6b6b6b',

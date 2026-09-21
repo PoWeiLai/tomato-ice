@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { api, type Table } from '../api'
-import { PRESS } from '../store'
+import { PRESS, STORE } from '../store'
 import StoreMap from '../components/StoreMap.vue'
 import PressCard from '../components/PressCard.vue'
 
@@ -13,13 +13,15 @@ onMounted(async () => {
 
 <template>
   <div class="home">
-    <!-- 店門口照片完整呈現（4:3），店名壓在照片下緣 -->
+    <!-- 門面照片完整呈現（4:3），店名壓在照片下緣，下方一條希臘回紋 -->
     <div class="hero">
       <div class="hero-text">
-        <h1>嚐香聚牛肉麵</h1>
-        <p>客人掃桌上的 QRcode 即可點餐，訂單直接進廚房看板。</p>
+        <h1>{{ STORE.name }}</h1>
+        <p>專注番茄牛肉麵・天然冰品・原汁飲品</p>
       </div>
     </div>
+    <div class="meander hero-trim" aria-hidden="true"></div>
+    <p class="lead muted">客人掃桌上的 QRcode 即可點餐，訂單直接進廚房看板。</p>
 
     <div class="cards">
       <RouterLink to="/takeout" class="card tile takeout">
@@ -58,6 +60,8 @@ onMounted(async () => {
 .home {
   min-height: 100vh;
   padding: 24px 20px 64px;
+  /* 白牆配天空：上白下淡藍 */
+  background: linear-gradient(180deg, #ffffff 0%, var(--bg) 40%);
 }
 .home > * {
   max-width: 720px;
@@ -66,19 +70,21 @@ onMounted(async () => {
 }
 .hero {
   position: relative;
-  aspect-ratio: 4 / 3; /* 跟照片同比例，才不會裁掉招牌 */
-  border-radius: var(--radius);
+  aspect-ratio: 4 / 3; /* 跟門面照同比例，才不會裁掉招牌 */
+  border-radius: var(--radius) var(--radius) 0 0;
   overflow: hidden;
   box-shadow: var(--shadow);
-  background: url('/images/嚐香聚.jpg') center / cover no-repeat;
+  background: url('/images/門面.jpg') center / cover no-repeat;
+  border: 3px solid #fff;
+  border-bottom: 0;
 }
 .hero-text {
   position: absolute;
   inset: auto 0 0;
   padding: 48px 20px 18px;
-  background: linear-gradient(180deg, transparent, rgba(31, 27, 22, 0.8));
+  background: linear-gradient(180deg, transparent, rgba(18, 70, 138, 0.85));
   color: #fff;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
 }
 .hero h1 {
   margin: 0;
@@ -89,16 +95,29 @@ onMounted(async () => {
   margin: 8px 0 0;
   opacity: 0.92;
 }
+.hero-trim {
+  background-color: #fff;
+  border: 3px solid #fff;
+  border-top: 0;
+  border-radius: 0 0 var(--radius) var(--radius);
+  box-shadow: var(--shadow);
+  height: 18px;
+}
+.lead {
+  margin: 16px 0 0;
+  text-align: center;
+}
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 16px;
-  margin: 40px auto;
+  margin: 28px auto 40px;
 }
 .tile {
   padding: 20px;
   text-decoration: none;
   color: inherit;
+  border-top: 4px solid var(--brand);
 }
 .tile p {
   margin: 6px 0 0;
@@ -116,6 +135,7 @@ onMounted(async () => {
 .sub {
   font-size: 18px;
   margin-bottom: 12px;
+  color: var(--brand-dark);
 }
 .press {
   margin-bottom: 32px;
@@ -132,7 +152,7 @@ onMounted(async () => {
   font-size: 22px;
   font-weight: 700;
   text-decoration: none;
-  color: inherit;
+  color: var(--brand);
 }
 @media (max-width: 600px) {
   .home {

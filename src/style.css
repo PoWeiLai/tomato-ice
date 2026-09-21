@@ -1,18 +1,21 @@
 :root {
-  --bg: #faf7f2;
+  /* 藍白希臘風：白牆、愛琴海藍、淡淡的天空藍底 */
+  --bg: #f3f8fd;
   --surface: #ffffff;
-  --line: #e7e1d8;
-  --ink: #1f1b16;
-  --muted: #797064;
-  --brand: #b8431f;
-  --brand-dark: #93330f;
-  --brand-soft: #fdeee7;
+  --line: #d5e3f2;
+  --ink: #10243d;
+  --muted: #5d7089;
+  --brand: #1b5fb4;
+  --brand-dark: #12468a;
+  --brand-soft: #e4eefb;
+  /* 希臘回紋（meander）花邊，用在抬頭與卡片下緣 */
+  --meander: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='12' viewBox='0 0 24 12'%3E%3Cpath fill='none' stroke='%231b5fb4' stroke-width='1.6' d='M0 1h22v10H8V4h10v4h-4V6'/%3E%3C/svg%3E");
   --ok: #1f7a4d;
   --ok-soft: #e6f5ec;
   --warn: #b57314;
   --warn-soft: #fdf2e0;
   --radius: 14px;
-  --shadow: 0 1px 2px rgba(31, 27, 22, 0.06), 0 8px 24px rgba(31, 27, 22, 0.06);
+  --shadow: 0 1px 2px rgba(16, 36, 61, 0.06), 0 8px 24px rgba(16, 36, 61, 0.08);
   color-scheme: light;
 }
 
@@ -129,6 +132,12 @@ textarea:focus {
   box-shadow: var(--shadow);
   max-width: min(90vw, 420px);
   text-align: center;
+}
+
+/* 回紋花邊：高 12px 的橫條，放在區塊上下當裝飾 */
+.meander {
+  height: 12px;
+  background: var(--meander) repeat-x center / 24px 12px;
 }
 
 @media print {

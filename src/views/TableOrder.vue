@@ -311,12 +311,13 @@ onUnmounted(unsubscribe)
 
 <template>
   <div class="page">
-    <!-- 門面照片當抬頭，跟店裡紙本菜單同一個版型 -->
-    <div class="banner" role="img" aria-label="嚐香聚牛肉麵 門面">
+    <!-- 招牌合照當抬頭，下緣一條希臘回紋 -->
+    <div class="banner" role="img" aria-label="蔗家店 招牌">
       <div class="banner-text">
-        <strong>嚐香聚牛肉麵</strong>
+        <strong>{{ STORE.name }}</strong>
         <span>{{ takeout ? '外帶點餐' : `內用 ${tableNo} 號桌` }}</span>
       </div>
+      <div class="meander banner-trim" aria-hidden="true"></div>
     </div>
     <header class="top">
       <div>
@@ -385,6 +386,16 @@ onUnmounted(unsubscribe)
             <span class="muted small">新菜色、公休、優惠都在臉書搶先說，追蹤不漏接</span>
           </span>
           <span class="fb-go">去看看 ›</span>
+        </a>
+
+        <!-- LINE 官方帳號：網址在 src/store.ts 的 STORE.line 改 -->
+        <a v-if="STORE.line" :href="STORE.line" target="_blank" rel="noopener" class="card fb line press">
+          <span class="fb-icon" aria-hidden="true">L</span>
+          <span class="fb-text">
+            <strong>加入 LINE 好友，贈 100 元抵用券 🎁</strong>
+            <span class="muted small">優惠、公休、新品消息都在 LINE 第一時間通知</span>
+          </span>
+          <span class="fb-go">加好友 ›</span>
         </a>
 
         <StoreMap class="press" />
@@ -561,11 +572,11 @@ onUnmounted(unsubscribe)
 </template>
 
 <style scoped>
-/* 配色取自店裡的紙本菜單：橘色漸層底、紅字標題、門面照片抬頭 */
+/* 藍白希臘風：白牆上淡天空藍漸層、愛琴海藍標題、招牌照抬頭 */
 .page {
-  --paper-top: #f7d2ad;
-  --paper-bottom: #f0a96f;
-  --menu-red: #b3261e;
+  --paper-top: #ffffff;
+  --paper-bottom: #d4e6f8;
+  --menu-blue: #1b5fb4;
   max-width: 640px;
   margin: 0 auto;
   padding-bottom: 96px;
@@ -573,19 +584,28 @@ onUnmounted(unsubscribe)
   background: linear-gradient(180deg, var(--paper-top), var(--paper-bottom));
 }
 .banner {
-  aspect-ratio: 4 / 3; /* 跟照片同比例，完整顯示店門口 */
-  background: url('/images/嚐香聚.jpg') center / cover no-repeat;
+  aspect-ratio: 4 / 3; /* 跟門面照同比例，才不會裁掉招牌 */
+  background: url('/images/門面.jpg') center / cover no-repeat;
   position: relative;
 }
 .banner-text {
   position: absolute;
   inset: auto 0 0;
   padding: 28px 16px 12px;
-  background: linear-gradient(180deg, transparent, rgba(31, 27, 22, 0.75));
+  background: linear-gradient(180deg, transparent, rgba(18, 70, 138, 0.82));
   color: #fff;
   display: flex;
   align-items: baseline;
   gap: 10px;
+}
+/* 回紋壓在照片底邊，白底藍紋，像希臘小島的門框 */
+.banner-trim {
+  position: absolute;
+  inset: auto 0 0;
+  background-color: #fff;
+}
+.banner-text {
+  bottom: 12px;
 }
 .banner-text strong {
   font-size: 22px;
@@ -601,15 +621,15 @@ onUnmounted(unsubscribe)
   justify-content: space-between;
   gap: 12px;
   padding: 16px;
-  background: rgba(255, 250, 244, 0.92);
+  background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(6px);
-  border-bottom: 1px solid rgba(179, 38, 30, 0.18);
+  border-bottom: 1px solid rgba(27, 95, 180, 0.18);
   position: sticky;
   top: 0;
   z-index: 20;
 }
 .top h1 {
-  color: var(--menu-red);
+  color: var(--menu-blue);
 }
 .small {
   font-size: 13px;
@@ -647,8 +667,8 @@ onUnmounted(unsubscribe)
 }
 .cats button {
   background: rgba(255, 255, 255, 0.7);
-  border-color: rgba(179, 38, 30, 0.25);
-  color: var(--menu-red);
+  border-color: rgba(27, 95, 180, 0.25);
+  color: var(--menu-blue);
   font-weight: 600;
 }
 .cats::-webkit-scrollbar {
@@ -658,8 +678,8 @@ onUnmounted(unsubscribe)
   white-space: nowrap;
 }
 .cats button.on {
-  background: var(--menu-red);
-  border-color: var(--menu-red);
+  background: var(--menu-blue);
+  border-color: var(--menu-blue);
   color: #fff;
 }
 .list {
@@ -680,7 +700,7 @@ onUnmounted(unsubscribe)
 .press-title {
   margin: 0;
   font-size: 15px;
-  color: var(--menu-red);
+  color: var(--menu-blue);
 }
 /* 臉書卡片：藍色圓形 f 當圖示，整張可點 */
 .fb {
@@ -725,6 +745,19 @@ onUnmounted(unsubscribe)
   font-weight: 600;
   color: #1877f2;
 }
+/* LINE 卡片：同一個版型換成 LINE 綠 */
+.fb.line {
+  border-color: #06c755;
+  box-shadow: 0 0 0 2px rgba(6, 199, 85, 0.15), var(--shadow);
+}
+.fb.line .fb-icon {
+  background: #06c755;
+  font-family: inherit;
+  padding-top: 0;
+}
+.fb.line .fb-go {
+  color: #06c755;
+}
 .item {
   display: flex;
   gap: 12px;
@@ -735,17 +768,21 @@ onUnmounted(unsubscribe)
   opacity: 0.55;
 }
 .thumb {
-  width: 76px;
-  height: 76px;
-  border-radius: 10px;
+  width: 80px;
+  height: 80px;
+  border-radius: 12px;
   object-fit: cover;
   flex: none;
+  /* 白色相框＋淡藍描邊，翻拍的 DM 照片放在白牆上也顯得亮 */
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 1px var(--line), 0 4px 12px rgba(27, 95, 180, 0.12);
+  background: #fff;
 }
 /* 還沒拍照的品項：用品名前兩字做字卡，不留空白 */
 .placeholder {
   display: grid;
   place-items: center;
-  background: linear-gradient(140deg, var(--brand-soft), #f6e3d8);
+  background: linear-gradient(140deg, var(--brand-soft), #cfe0f5);
   color: var(--brand-dark);
   font-weight: 700;
   font-size: 22px;
@@ -783,7 +820,7 @@ onUnmounted(unsubscribe)
 .tag {
   padding: 6px 10px;
   border-radius: 999px;
-  background: #f1ece4;
+  background: #e9f1fa;
   color: var(--muted);
   font-size: 13px;
 }
@@ -1064,7 +1101,7 @@ onUnmounted(unsubscribe)
   font-weight: 500;
   padding: 2px 8px;
   border-radius: 999px;
-  background: #f1ece4;
+  background: #e9f1fa;
   color: var(--muted);
 }
 .req.must {
