@@ -9,6 +9,7 @@ import { db, now, getSetting, setSetting, TAKEOUT_TABLE_ID, TABLE_COUNT, LOCAL, 
 import { IMAGES_DIR } from './paths.js';
 import { seedMenu } from './seed.js';
 import { sseHandler, broadcast } from './events.js';
+import { TRIAL_END, TRIAL_UNLIMITED, trialExpired, trialStatus, TRIAL_OVER_MESSAGE, expiredPage } from './trial.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -30,6 +31,18 @@ if ((await db.prepare('SELECT COUNT(*) AS n FROM menu_items').get()).n === 0) {
 }
 
 const app = express();
+
+// 試用到期就整站鎖住：所有網頁都換成一頁到期說明，所有 API 回 403。
+// 只放行 /api/health，這樣主機還活著／到期日設多少，從外面就看得出來。
+// 要解鎖或延長：改環境變數 TRIAL_END（見 server/trial.js 開頭）。
+app.use((req, res, next) => {
+  if (!trialExpired() || req.path === '/api/health') return next();
+  if (req.path.startsWith('/api/')) {
+    return res.status(403).json({ error: TRIAL_OVER_MESSAGE, trialExpired: true, trialEnd: TRIAL_END });
+  }
+  res.status(403).type('html').send(expiredPage());
+});
+
 app.use(express.json({ limit: '1mb' }));
 
 /* ---------- 工具 ---------- */
@@ -886,7 +899,7 @@ app.get(/^(?!\/api\/).*/, (_req, res, next) => {
 
 // db 欄位讓人從外面就能確認有沒有接上 Turso（turso = 永久保存；file = 存在主機上，重啟會掉）
 app.get('/api/health', (_req, res) =>
-  res.json({ ok: true, db: IS_REMOTE ? 'turso' : 'file', ...(DB_WARNING ? { warning: DB_WARNING } : {}) }),
+  res.json({ ok: true, db: IS_REMOTE ? 'turso' : 'file', trial: trialStatus(), ...(DB_WARNING ? { warning: DB_WARNING } : {}) }),
 );
 
 app.use(onError);
@@ -897,7 +910,11 @@ app.listen(PORT, '0.0.0.0', async () => {
   console.log(`  店內網址   ${baseURL()}`);
   console.log(`  廚房看板   ${baseURL()}/kitchen`);
   console.log(`  外帶點餐   ${baseURL()}/takeout`);
-  console.log(`  後台管理   ${baseURL()}/admin   （店員密碼 ${await staffPin()}）\n`);
+  console.log(`  後台管理   ${baseURL()}/admin   （店員密碼 ${await staffPin()}）`);
+  if (TRIAL_UNLIMITED) console.log('  試用期限   不限期（環境變數 TRIAL_END=0）\n');
+  else if (trialExpired())
+    console.log(`  試用期限   ✗ 已於 ${TRIAL_END} 結束，整站鎖住中（要延長請改環境變數 TRIAL_END）\n`);
+  else console.log(`  試用期限   ${TRIAL_END} 當天結束，還剩 ${trialStatus().daysLeft} 天\n`);
   keepAwake();
 });
 

@@ -142,6 +142,17 @@ export const PAYMENT_LABEL: Record<Payment, string> = {
   free: '免單',
 }
 
+/** 試用期狀態，unlimited 代表沒有期限 */
+export type TrialStatus =
+  | { unlimited: true; end?: undefined; expired?: undefined; daysLeft?: undefined }
+  | { unlimited?: undefined; end: string; expired: boolean; daysLeft: number }
+export interface Health {
+  ok: true
+  db: 'turso' | 'file'
+  trial: TrialStatus
+  warning?: string
+}
+
 const PIN_KEY = 'restaurant.staffPin'
 export const getPin = () => localStorage.getItem(PIN_KEY) || ''
 export const setPin = (pin: string) => localStorage.setItem(PIN_KEY, pin)
@@ -171,6 +182,9 @@ async function request<T>(path: string, options: { method?: string; body?: unkno
   const res = await fetch(`/api${path}`, { method: options.method || 'GET', headers, body })
   const text = await res.text()
   const data = text ? JSON.parse(text) : null
+  // 試用期中途到期（廚房看板整天開著不會重新整理）：重載一次，
+  // 伺服器就會改給那一頁到期說明，不會停在半殘的畫面繼續按
+  if (res.status === 403 && data?.trialExpired) location.reload()
   if (!res.ok) throw new ApiError(res.status, data?.error || `連線失敗（${res.status}）`)
   return data as T
 }
@@ -245,6 +259,8 @@ export const api = {
     request<{ ok: true; reply: string; replied_at: string | null }>(`/admin/feedback/${id}/reply`, { method: 'POST', body: { reply } }),
   myFeedback: (orderId: number) => request<Feedback | null>(`/feedback/by-order/${orderId}`),
   deleteFeedback: (id: number) => request<{ ok: true }>(`/admin/feedback/${id}`, { method: 'DELETE' }),
+
+  health: () => request<Health>('/health'),
 }
 
 /** 下載整份營運資料備份，交給店家自己保存 */

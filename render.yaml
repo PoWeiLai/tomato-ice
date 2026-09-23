@@ -22,3 +22,8 @@ services:
         sync: false
       # PUBLIC_URL 不用設：程式會自動讀 Render 給的 RENDER_EXTERNAL_URL，
       # QRcode 就會指向正確的線上網址。
+      # 試用期限：不設就是程式內定的 2026-09-30 當天結束，之後整站鎖住。
+      # 要延長就填 2026-10-31 這種日期；正式交付（不再限期）就填 0。
+      # 這是給部署的人用的，店家在後台改不到。
+      - key: TRIAL_END
+        sync: false
