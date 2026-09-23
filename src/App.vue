@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from './api'
 
-// 試用快結束時先提醒，不要讓店家毫無預警被關掉。
+// 試用期間一直提醒到期日，不要讓店家毫無預警被關掉。
 // 只在廚房看板／後台顯示，客人的點餐頁不出現。
 const route = useRoute()
 const isStaffPage = computed(() => route.path === '/kitchen' || route.path === '/admin')
@@ -14,10 +14,8 @@ onMounted(async () => {
   try {
     const { trial } = await api.health()
     if (trial.unlimited || trial.expired) return
-    if (trial.daysLeft <= 7) {
-      trialEnd.value = trial.end
-      daysLeft.value = trial.daysLeft
-    }
+    trialEnd.value = trial.end
+    daysLeft.value = trial.daysLeft
   } catch {
     // 提醒拿不到就算了，不影響做生意
   }
