@@ -5,7 +5,7 @@ import os from 'node:os';
 import { existsSync } from 'node:fs';
 import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { db, now, getSetting, setSetting, TAKEOUT_TABLE_ID, TABLE_COUNT, LOCAL, IS_REMOTE, DB_WARNING } from './db.js';
+import { db, now, getSetting, setSetting, TAKEOUT_TABLE_ID, TABLE_COUNT, LOCAL, IS_REMOTE, DB_WARNING, localMinutesNow } from './db.js';
 import { IMAGES_DIR } from './paths.js';
 import { seedMenu } from './seed.js';
 import { sseHandler, broadcast } from './events.js';
@@ -120,7 +120,7 @@ async function optionGroupsByItem(itemIds) {
 }
 
 // 訂單一律帶上 session 的內用/外帶與客人稱呼，廚房和帳單才知道這張是誰的
-const ORDER_SQL = `SELECT o.*, s.kind, s.customer, s.closed_at
+const ORDER_SQL = `SELECT o.*, s.kind, s.customer, s.pickup_at, s.closed_at
   FROM orders o JOIN sessions s ON s.id = o.session_id`;
 const orderById = (id) => db.prepare(`${ORDER_SQL} WHERE o.id = ?`).get(id);
 
@@ -155,10 +155,10 @@ async function openSession(tableId) {
   return db.prepare('SELECT * FROM sessions WHERE id = ?').get(id);
 }
 // 外帶：每一張單自己一個 session，結帳互不影響
-async function openTakeoutSession(customer) {
+async function openTakeoutSession(customer, pickupAt) {
   const { lastInsertRowid: id } = await db
-    .prepare("INSERT INTO sessions (table_id, kind, customer, opened_at) VALUES (?, 'takeout', ?, ?)")
-    .run(TAKEOUT_TABLE_ID, customer, now());
+    .prepare("INSERT INTO sessions (table_id, kind, customer, pickup_at, opened_at) VALUES (?, 'takeout', ?, ?, ?)")
+    .run(TAKEOUT_TABLE_ID, customer, pickupAt, now());
   return db.prepare('SELECT * FROM sessions WHERE id = ?').get(id);
 }
 /** 一張帳單（session）含訂單明細、原價與折扣後應收 */
@@ -251,12 +251,27 @@ app.get('/api/orders/:id', async (req, res) => {
   res.json((await withItems([order]))[0]);
 });
 
-// 送出訂單。外帶請帶 takeout: { name, phone }，不用桌號
+// 外帶取餐時間只能約在營業時間內（當天），前端 src/store.ts 的 hours 要跟這裡一致
+const PICKUP_OPEN = 10 * 60;
+const PICKUP_CLOSE = 21 * 60;
+const hhmm = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
+// 送出訂單。外帶請帶 takeout: { name, phone, pickupAt: 'HH:MM' }，不用桌號
 app.post('/api/orders', async (req, res) => {
   const { tableId, items, note = '', takeout } = req.body || {};
   let table;
   let customer = '';
+  let pickupAt = '';
   if (takeout) {
+    const t = String(takeout.pickupAt || '').match(/^([01]\d|2[0-3]):([0-5]\d)$/);
+    if (!t) return bad(res, '請選擇取餐時間');
+    const pickupMin = Number(t[1]) * 60 + Number(t[2]);
+    if (pickupMin < PICKUP_OPEN || pickupMin > PICKUP_CLOSE) {
+      return bad(res, `取餐時間要在營業時間 ${hhmm(PICKUP_OPEN)}–${hhmm(PICKUP_CLOSE)} 之間`);
+    }
+    // 留 5 分鐘緩衝給手機時間不準、選完才慢慢送出的客人
+    if (pickupMin < localMinutesNow() - 5) return bad(res, '這個取餐時間已經過了，請重新選擇');
+    pickupAt = hhmm(pickupMin);
     const name = String(takeout.name || '').trim();
     // 只收台灣手機號碼（09 開頭 10 碼），去掉客人可能打的空格或連字號
     const phone = String(takeout.phone || '').replace(/[\s-]/g, '');
@@ -318,7 +333,7 @@ app.post('/api/orders', async (req, res) => {
     });
   }
 
-  const session = takeout ? await openTakeoutSession(customer) : await openSession(table.id);
+  const session = takeout ? await openTakeoutSession(customer, pickupAt) : await openSession(table.id);
   // 訂單主檔與明細放同一個交易，不會出現有單沒菜的半成品
   const orderId = await db.transaction(async (tx) => {
     const { lastInsertRowid } = await tx

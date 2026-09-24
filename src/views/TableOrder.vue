@@ -46,10 +46,36 @@ const statusText = (o: Order) =>
 /* ---------- 外帶：客人資料與自己的單 ---------- */
 // 外帶客人沒有桌號可查，手機自己記住今天送出的訂單編號
 const TAKEOUT_KEY = 'restaurant.takeoutOrders'
-const CUSTOMER_KEY = 'restaurant.takeoutCustomer'
-const customer = reactive<{ name: string; phone: string }>(
-  JSON.parse(localStorage.getItem(CUSTOMER_KEY) || '{"name":"","phone":""}')
-)
+// 稱呼、電話每次都空白讓客人自己填，不記在手機上（舊版記過的也一併清掉）
+localStorage.removeItem('restaurant.takeoutCustomer')
+const customer = reactive({ name: '', phone: '', pickupAt: '' })
+
+/* 取餐時間：營業時間內每 15 分鐘一格，最早是現在起 15 分鐘後（留時間給廚房做） */
+const SLOT_STEP = 15
+const toMin = (hm: string) => {
+  const [h, m] = hm.split(':').map(Number)
+  return h * 60 + m
+}
+const [OPEN_MIN, CLOSE_MIN] = (STORE.hours.match(/\d{1,2}:\d{2}/g) || ['10:00', '21:00']).map(toMin)
+const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
+const nowMin = ref(0)
+const tickNow = () => {
+  const d = new Date()
+  nowMin.value = d.getHours() * 60 + d.getMinutes()
+}
+tickNow()
+const clock = setInterval(tickNow, 30_000)
+onUnmounted(() => clearInterval(clock))
+const pickupSlots = computed(() => {
+  const earliest = Math.ceil((nowMin.value + SLOT_STEP) / SLOT_STEP) * SLOT_STEP
+  const slots: string[] = []
+  for (let m = Math.max(OPEN_MIN, earliest); m <= CLOSE_MIN; m += SLOT_STEP) slots.push(hhmm(m))
+  return slots
+})
+// 時間一過，已選的時段就不能再用，請客人重選
+watch(pickupSlots, (slots) => {
+  if (customer.pickupAt && !slots.includes(customer.pickupAt)) customer.pickupAt = ''
+})
 /** 台灣手機：09 開頭共 10 碼；客人打的空格、連字號先去掉 */
 const PHONE_RE = /^09\d{8}$/
 const cleanPhone = () => customer.phone.replace(/[\s-]/g, '')
@@ -158,6 +184,8 @@ async function submit() {
   if (cart.length === 0) return
   if (props.takeout && !customer.name.trim()) return say('請留下稱呼，餐點好了才叫得到您')
   if (props.takeout && !PHONE_RE.test(cleanPhone())) return say('請輸入正確的手機號碼（09 開頭共 10 碼）')
+  if (props.takeout && pickupSlots.value.length === 0) return say(`今天已過營業時間（${STORE.hours}），明天再來喔`)
+  if (props.takeout && !customer.pickupAt) return say('請選擇取餐時間')
   submitting.value = true
   try {
     const order = await api.placeOrder(
@@ -169,17 +197,17 @@ async function submit() {
         choiceIds: l.choices.map((c) => c.id),
       })),
       '',
-      props.takeout ? { name: customer.name.trim(), phone: cleanPhone() } : undefined
+      props.takeout ? { name: customer.name.trim(), phone: cleanPhone(), pickupAt: customer.pickupAt } : undefined
     )
     if (props.takeout) {
       saveTakeoutIds([...myTakeoutIds(), order.id])
-      localStorage.setItem(CUSTOMER_KEY, JSON.stringify({ name: customer.name.trim(), phone: cleanPhone() }))
+      Object.assign(customer, { name: '', phone: '', pickupAt: '' })
     }
     cart.splice(0, cart.length)
     cartOpen.value = false
     await loadOrders()
     view.value = 'orders'
-    say(props.takeout ? `外帶單已送出（第 ${order.id} 單），好了會叫您 🍜` : '訂單已送出，廚房已收到 🍜')
+    say(props.takeout ? `外帶單已送出（第 ${order.id} 單），請於 ${order.pickup_at} 來取餐 🍜` : '訂單已送出，廚房已收到 🍜')
   } catch (e) {
     say(e instanceof Error ? e.message : '送出失敗，請再試一次')
   } finally {
@@ -410,7 +438,7 @@ onUnmounted(unsubscribe)
       <p v-else-if="takeout" class="takeout-hint muted small">餐點完成後請到櫃檯報「第幾單」或稱呼取餐、付款（可用現金、刷卡、LINE Pay、Apple Pay）</p>
       <article v-for="o in myOrders" :key="o.id" class="card order">
         <header>
-          <strong>第 {{ o.id }} 單<em v-if="o.kind === 'takeout'" class="muted who">・{{ o.customer }}</em></strong>
+          <strong>第 {{ o.id }} 單<em v-if="o.kind === 'takeout'" class="muted who">・{{ o.customer }}<template v-if="o.pickup_at">・{{ o.pickup_at }} 取餐</template></em></strong>
           <span class="status" :data-status="o.status">{{ statusText(o) }}</span>
         </header>
         <ul>
@@ -545,11 +573,19 @@ onUnmounted(unsubscribe)
         <div v-if="takeout" class="customer">
           <label class="note-field">
             <span class="muted small">稱呼（必填，好了要叫您）</span>
-            <input v-model="customer.name" placeholder="例：王小姐、阿明" autocomplete="name" />
+            <input v-model="customer.name" placeholder="例：王小姐、阿明" autocomplete="off" />
           </label>
           <label class="note-field">
             <span class="muted small">手機（必填，餐點有問題才聯絡得到）</span>
-            <input v-model="customer.phone" type="tel" inputmode="numeric" placeholder="09xxxxxxxx" maxlength="12" autocomplete="tel" />
+            <input v-model="customer.phone" type="tel" inputmode="numeric" placeholder="09xxxxxxxx" maxlength="12" autocomplete="off" />
+          </label>
+          <label class="note-field">
+            <span class="muted small">取餐時間（必填，營業時間 {{ STORE.hours }}）</span>
+            <select v-if="pickupSlots.length" v-model="customer.pickupAt">
+              <option value="" disabled>請選擇取餐時間</option>
+              <option v-for="s in pickupSlots" :key="s" :value="s">今天 {{ s }}</option>
+            </select>
+            <span v-else class="closed">今天已過營業時間，明天再來喔</span>
           </label>
         </div>
       </div>
@@ -921,6 +957,10 @@ onUnmounted(unsubscribe)
   gap: 12px;
   padding-top: 14px;
   border-top: 1px dashed var(--line);
+}
+.customer .closed {
+  color: var(--danger, #c0392b);
+  font-weight: 600;
 }
 .order footer {
   margin-top: 10px;

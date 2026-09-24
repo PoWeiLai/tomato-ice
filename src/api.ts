@@ -54,6 +54,7 @@ export interface Order {
   table_id: number
   kind: SessionKind
   customer: string
+  pickup_at: string
   closed_at: string | null
   status: OrderStatus
   note: string
@@ -61,9 +62,11 @@ export interface Order {
   items: OrderItem[]
   total: number
 }
-/** 廚房／帳單標題：內用顯示桌號，外帶顯示客人稱呼 */
-export const orderTitle = (o: { kind: SessionKind; customer: string; table_id: number }) =>
-  o.kind === 'takeout' ? `外帶・${o.customer}` : `${o.table_id} 號桌`
+/** 廚房／帳單標題：內用顯示桌號，外帶顯示客人稱呼與取餐時間 */
+export const orderTitle = (o: { kind: SessionKind; customer: string; pickup_at?: string; table_id: number }) =>
+  o.kind === 'takeout'
+    ? `外帶・${o.customer}${o.pickup_at ? `・${o.pickup_at} 取` : ''}`
+    : `${o.table_id} 號桌`
 export interface Table {
   id: number
   name: string
@@ -74,6 +77,7 @@ export interface Bill {
   table_id: number
   kind: SessionKind
   customer: string
+  pickup_at: string
   opened_at: string
   closed_at: string | null
   table: Table
@@ -198,7 +202,7 @@ export const api = {
     tableId: number,
     items: { itemId: number; qty: number; note?: string; choiceIds?: number[] }[],
     note = '',
-    takeout?: { name: string; phone: string }
+    takeout?: { name: string; phone: string; pickupAt: string }
   ) =>
     request<Order>('/orders', { method: 'POST', body: { tableId, items, note, takeout } }),
   order: (id: number) => request<Order>(`/orders/${id}`),

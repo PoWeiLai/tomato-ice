@@ -45,6 +45,11 @@ if (IS_REMOTE) {
 // 報表要用店家當地的日期分天。Turso 主機在國外，SQLite 的 'localtime' 會變成 UTC，
 // 所以一律用固定時差換算，預設台灣 +8。
 const TZ_OFFSET_HOURS = Number(process.env.TZ_OFFSET_HOURS ?? 8);
+/** 店家當地現在是午夜起第幾分鐘，外帶取餐時間要用 */
+export const localMinutesNow = () => {
+  const d = new Date(Date.now() + TZ_OFFSET_HOURS * 3600_000);
+  return d.getUTCHours() * 60 + d.getUTCMinutes();
+};
 export const LOCAL = `'${TZ_OFFSET_HOURS >= 0 ? '+' : '-'}${Math.abs(TZ_OFFSET_HOURS)} hours'`;
 
 /**
@@ -150,6 +155,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   table_id      INTEGER NOT NULL REFERENCES tables(id),
   kind          TEXT NOT NULL DEFAULT 'dine',   -- dine=內用 | takeout=外帶
   customer      TEXT NOT NULL DEFAULT '',       -- 外帶客人稱呼／電話
+  pickup_at     TEXT NOT NULL DEFAULT '',       -- 外帶預約取餐時間（當天 HH:MM）
   opened_at     TEXT NOT NULL,
   closed_at     TEXT,
   paid_total    INTEGER,                        -- 實收（已扣折扣）
@@ -242,6 +248,11 @@ if (!(await columnsOf('sessions')).includes('kind')) {
     ALTER TABLE sessions ADD COLUMN discount INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE sessions ADD COLUMN discount_note TEXT NOT NULL DEFAULT '';
   `);
+}
+
+// 外帶加了預約取餐時間
+if (!(await columnsOf('sessions')).includes('pickup_at')) {
+  await db.exec("ALTER TABLE sessions ADD COLUMN pickup_at TEXT NOT NULL DEFAULT ''");
 }
 
 // 內用桌數：預設 6 桌，可用環境變數 TABLE_COUNT 調整。

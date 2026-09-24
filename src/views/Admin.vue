@@ -174,7 +174,7 @@ function discountAmount(bill: Bill) {
   return 0
 }
 const payable = (bill: Bill) => Math.max(0, bill.subtotal - discountAmount(bill))
-const billTitle = (bill: Bill) => orderTitle({ kind: bill.kind, customer: bill.customer, table_id: bill.table_id })
+const billTitle = (bill: Bill) => orderTitle(bill)
 
 const closeBill = (bill: Bill, payment: Payment) => {
   const d = discountOf(bill)
